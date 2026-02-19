@@ -8,7 +8,7 @@
 #   ./scripts/regenerate-cli.sh
 #
 # Requirements:
-#   - fastmcp >= 3.0.0rc1
+#   - fastmcp >= 3.0.0
 #   - NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID environment variables (or test values)
 
 set -e

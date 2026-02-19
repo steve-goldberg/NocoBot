@@ -34,14 +34,14 @@ setup(
        "cli": [
            # CLI is now auto-generated from MCP server
            # Uses cyclopts (via fastmcp) instead of typer
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.0",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
        "mcp": [
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.0",
        ],
        "all": [
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.0",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
    },
