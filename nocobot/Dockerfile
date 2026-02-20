@@ -7,7 +7,7 @@ COPY pyproject.toml LICENSE ./
 
 # Copy all source files into nocobot/ subdirectory to match package structure
 # (Docker context is nocobot/, so we recreate the package hierarchy)
-COPY __init__.py __main__.py main.py agent.py mcp_client.py config.py ./nocobot/
+COPY __init__.py __main__.py main.py agent.py mcp_client.py config.py ratelimit.py ./nocobot/
 COPY bus/ ./nocobot/bus/
 COPY channels/ ./nocobot/channels/
 COPY providers/ ./nocobot/providers/
