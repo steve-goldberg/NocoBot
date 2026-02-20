@@ -23,6 +23,13 @@ class Config(BaseSettings):
     agent_max_history: int = 40
     agent_max_tokens: int = 200_000
 
+    # Input validation
+    max_message_length: int = 4096
+
+    # Per-user rate limiting
+    rate_limit_messages: int = 10
+    rate_limit_window: float = 60.0
+
     model_config = {
         "env_prefix": "",
         "env_file": ".env",

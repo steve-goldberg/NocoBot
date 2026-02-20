@@ -21,6 +21,9 @@ class TelegramConfig:
     token: str = ""
     allow_from: list[str] | None = None
     proxy: str | None = None
+    max_message_length: int = 4096
+    rate_limit_messages: int = 10
+    rate_limit_window: float = 60.0
 
 
 def _markdown_to_telegram_html(text: str) -> str:

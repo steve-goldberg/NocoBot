@@ -1,5 +1,6 @@
 """Base channel interface for chat platforms."""
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -7,6 +8,10 @@ from loguru import logger
 
 from nocobot.bus.events import InboundMessage, OutboundMessage
 from nocobot.bus.queue import MessageBus
+from nocobot.ratelimit import TokenBucket
+
+# Control characters (C0 and C1) except tab, newline, carriage return
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 
 class BaseChannel(ABC):
@@ -30,6 +35,16 @@ class BaseChannel(ABC):
         self.config = config
         self.bus = bus
         self._running = False
+
+        # Input validation
+        self._max_message_length: int = getattr(config, "max_message_length", 4096)
+
+        # Per-user rate limiter
+        capacity = getattr(config, "rate_limit_messages", 10)
+        window = getattr(config, "rate_limit_window", 60.0)
+        self._rate_limiter: TokenBucket | None = (
+            TokenBucket(capacity, window) if capacity > 0 else None
+        )
     
     @abstractmethod
     async def start(self) -> None:
@@ -83,6 +98,11 @@ class BaseChannel(ABC):
                     return True
         return False
     
+    @staticmethod
+    def _sanitize_content(content: str) -> str:
+        """Strip null bytes and control characters, preserving tab/newline/CR."""
+        return _CONTROL_CHAR_RE.sub("", content)
+
     async def _handle_message(
         self,
         sender_id: str,
@@ -93,23 +113,50 @@ class BaseChannel(ABC):
     ) -> None:
         """
         Handle an incoming message from the chat platform.
-        
-        This method checks permissions and forwards to the bus.
-        
-        Args:
-            sender_id: The sender's identifier.
-            chat_id: The chat/channel identifier.
-            content: Message text content.
-            media: Optional list of media URLs.
-            metadata: Optional channel-specific metadata.
+
+        Checks permissions, validates input, enforces rate limits,
+        and forwards to the bus.
         """
+        # 1. Permission check
         if not self.is_allowed(sender_id):
             logger.warning(
                 f"Access denied for sender {sender_id} on channel {self.name}. "
                 f"Add them to allowFrom list in config to grant access."
             )
             return
-        
+
+        # 2. Sanitize content
+        content = self._sanitize_content(content)
+
+        # 3. Length check
+        if len(content) > self._max_message_length:
+            logger.warning(
+                f"Message too long from {sender_id}: {len(content)} chars "
+                f"(max {self._max_message_length})"
+            )
+            await self.bus.publish_outbound(OutboundMessage(
+                channel=self.name,
+                chat_id=str(chat_id),
+                content=(
+                    f"Message too long ({len(content)} characters). "
+                    f"Please keep messages under {self._max_message_length} characters."
+                ),
+            ))
+            return
+
+        # 4. Per-user rate limiting
+        if self._rate_limiter is not None:
+            rate_key = str(sender_id).split("|")[0]
+            if not self._rate_limiter.consume(rate_key):
+                logger.warning(f"Rate limited sender {sender_id} on channel {self.name}")
+                await self.bus.publish_outbound(OutboundMessage(
+                    channel=self.name,
+                    chat_id=str(chat_id),
+                    content="You're sending messages too quickly. Please wait a moment.",
+                ))
+                return
+
+        # 5. Publish to bus
         msg = InboundMessage(
             channel=self.name,
             sender_id=str(sender_id),
@@ -118,7 +165,7 @@ class BaseChannel(ABC):
             media=media or [],
             metadata=metadata or {}
         )
-        
+
         await self.bus.publish_inbound(msg)
     
     @property

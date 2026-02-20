@@ -30,6 +30,9 @@ async def main() -> None:
     telegram_config = TelegramConfig(
         token=config.telegram_token,
         allow_from=config.telegram_allow_from or None,
+        max_message_length=config.max_message_length,
+        rate_limit_messages=config.rate_limit_messages,
+        rate_limit_window=config.rate_limit_window,
     )
     telegram = TelegramChannel(telegram_config, bus)
 
