@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from loguru import logger
@@ -21,22 +22,21 @@ class AgentLoop:
         bus: MessageBus,
         mcp: MCPClient,
         api_key: str,
-        model: str = "anthropic/claude-sonnet-4",
-        max_iterations: int = 20,
+        model: str,
+        max_iterations: int,
+        max_history: int,
+        message_timeout: float,
+        max_tokens_budget: int,
     ):
-        """Initialize the agent.
-
-        Args:
-            bus: Message bus for receiving/sending messages
-            mcp: MCP client for tool calls
-            api_key: OpenRouter API key
-            model: LLM model to use
-            max_iterations: Max tool call iterations per message
-        """
         self.bus = bus
         self.mcp = mcp
         self.max_iterations = max_iterations
+        self.max_history = max_history
+        self.message_timeout = message_timeout
+        self.max_tokens_budget = max_tokens_budget
         self._running = False
+        self._semaphore = asyncio.Semaphore(3)
+        self._tasks: set[asyncio.Task] = set()
 
         # In-memory conversation history per chat_id
         self._history: dict[str, list[dict[str, Any]]] = {}
@@ -59,12 +59,13 @@ class AgentLoop:
 
         while self._running:
             try:
-                # Wait for inbound message
                 msg = await asyncio.wait_for(
                     self.bus.consume_inbound(),
                     timeout=1.0
                 )
-                await self._process_message(msg)
+                task = asyncio.create_task(self._handle_with_guard(msg))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -73,7 +74,34 @@ class AgentLoop:
     async def stop(self) -> None:
         """Stop the agent loop."""
         self._running = False
+        for task in list(self._tasks):
+            task.cancel()
         logger.info("Agent loop stopped")
+
+    async def _handle_with_guard(self, msg: InboundMessage) -> None:
+        """Process a message with semaphore, timeout, and error handling."""
+        async with self._semaphore:
+            try:
+                await asyncio.wait_for(
+                    self._process_message(msg),
+                    timeout=self.message_timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Message processing timed out after {self.message_timeout}s "
+                    f"for {msg.session_key}"
+                )
+                await self._send_response(
+                    msg,
+                    "Sorry, that request took too long to process. "
+                    "Try a simpler request or start fresh with /new."
+                )
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                await self._send_response(
+                    msg,
+                    "Something went wrong processing your request. Please try again."
+                )
 
     async def _process_message(self, msg: InboundMessage) -> None:
         """Process an inbound message."""
@@ -108,6 +136,10 @@ class AgentLoop:
         # Add user message to history
         history.append({"role": "user", "content": msg.content})
 
+        # Trim history to prevent unbounded token growth
+        if len(history) > self.max_history:
+            history[:] = history[-self.max_history:]
+
         # Build messages for LLM
         messages = [{"role": "system", "content": self._system_prompt}] + history
 
@@ -115,6 +147,9 @@ class AgentLoop:
         tools = self.mcp.get_tools_for_llm()
 
         # Agent loop - call LLM, execute tools, repeat
+        total_tokens = 0
+        start_time = time.monotonic()
+
         for iteration in range(self.max_iterations):
             response = await self._llm.chat(
                 messages=messages,
@@ -123,11 +158,38 @@ class AgentLoop:
                 temperature=0.7,
             )
 
+            # Track token usage
+            iter_tokens = response.usage.get("total_tokens", 0)
+            total_tokens += iter_tokens
+            elapsed = time.monotonic() - start_time
+
+            logger.info(
+                f"[{msg.session_key}] iteration={iteration + 1}/{self.max_iterations} "
+                f"tools={len(response.tool_calls)} "
+                f"tokens={iter_tokens} total={total_tokens} "
+                f"elapsed={elapsed:.1f}s"
+            )
+
             # If no tool calls, we're done
             if not response.has_tool_calls:
                 if response.content:
                     history.append({"role": "assistant", "content": response.content})
                     await self._send_response(msg, response.content)
+                return
+
+            # Check token budget before executing more tool calls
+            if total_tokens >= self.max_tokens_budget:
+                logger.warning(
+                    f"Token budget exceeded ({total_tokens}/{self.max_tokens_budget}) "
+                    f"for {msg.session_key}"
+                )
+                # Ask LLM to summarize what it has so far
+                summary = response.content or "I used a lot of resources on this request."
+                history.append({"role": "assistant", "content": summary})
+                await self._send_response(
+                    msg,
+                    f"{summary}\n\n_(Token budget reached - try /new for a fresh start)_"
+                )
                 return
 
             # Execute tool calls
@@ -152,7 +214,11 @@ class AgentLoop:
                 })
 
         # Max iterations reached
-        logger.warning(f"Max iterations ({self.max_iterations}) reached")
+        elapsed = time.monotonic() - start_time
+        logger.warning(
+            f"Max iterations ({self.max_iterations}) reached for {msg.session_key} "
+            f"total_tokens={total_tokens} elapsed={elapsed:.1f}s"
+        )
         await self._send_response(
             msg,
             "I've been working on this for a while. Here's what I found so far."

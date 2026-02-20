@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import signal
-from typing import Any
-
 from loguru import logger
 
 from nocobot.agent import AgentLoop
@@ -41,6 +39,10 @@ async def main() -> None:
         mcp=mcp,
         api_key=config.openrouter_api_key,
         model=config.openrouter_model,
+        max_iterations=config.agent_max_iterations,
+        max_history=config.agent_max_history,
+        message_timeout=config.agent_message_timeout,
+        max_tokens_budget=config.agent_max_tokens,
     )
 
     # Set up graceful shutdown

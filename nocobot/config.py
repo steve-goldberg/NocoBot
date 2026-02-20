@@ -17,6 +17,12 @@ class Config(BaseSettings):
     # NocoDB MCP Server
     nocodb_mcp_url: str = "http://ncdbmcp.lab/mcp"
 
+    # Agent limits
+    agent_max_iterations: int = 10
+    agent_message_timeout: float = 300.0
+    agent_max_history: int = 40
+    agent_max_tokens: int = 200_000
+
     model_config = {
         "env_prefix": "",
         "env_file": ".env",
