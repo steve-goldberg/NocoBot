@@ -17,6 +17,8 @@ from nocobot.providers import LiteLLMProvider, ToolCallRequest
 class AgentLoop:
     """Agent that processes messages using LLM and MCP tools."""
 
+    _TOOL_RESULT_MAX = 500
+
     def __init__(
         self,
         bus: MessageBus,
@@ -151,12 +153,22 @@ class AgentLoop:
         start_time = time.monotonic()
 
         for iteration in range(self.max_iterations):
-            response = await self._llm.chat(
+            response = await self._llm.chat_with_retry(
                 messages=messages,
                 tools=tools if tools else None,
                 max_tokens=4096,
                 temperature=0.7,
             )
+
+            # Bail on LLM error — don't append to history (prevents context poisoning)
+            if response.finish_reason == "error":
+                logger.error(f"LLM error for {msg.session_key}: {response.content}")
+                await self._send_response(
+                    msg,
+                    "Sorry, I'm having trouble reaching the AI service. "
+                    "Please try again in a moment.",
+                )
+                return
 
             # Track token usage
             iter_tokens = response.usage.get("total_tokens", 0)
@@ -204,6 +216,10 @@ class AgentLoop:
             ]
             messages.append(assistant_msg)
 
+            # Send progress message if LLM included text alongside tool calls
+            if response.content:
+                await self._send_response(msg, response.content, progress=True)
+
             # Execute each tool call
             for tc in response.tool_calls:
                 result = await self._execute_tool(tc)
@@ -221,7 +237,9 @@ class AgentLoop:
         )
         await self._send_response(
             msg,
-            "I've been working on this for a while. Here's what I found so far."
+            f"I've reached the maximum of {self.max_iterations} iterations "
+            f"({elapsed:.0f}s elapsed). Try breaking your request into smaller "
+            f"steps or start fresh with /new.",
         )
 
     async def _execute_tool(self, tc: ToolCallRequest) -> str:
@@ -229,17 +247,22 @@ class AgentLoop:
         logger.debug(f"Executing tool: {tc.name}")
         try:
             result = await self.mcp.call_tool(tc.name, tc.arguments)
+            if len(result) > self._TOOL_RESULT_MAX:
+                result = result[:self._TOOL_RESULT_MAX] + "... (truncated)"
             return result
         except Exception as e:
             error_msg = f"Tool error: {e}"
             logger.error(error_msg)
             return error_msg
 
-    async def _send_response(self, msg: InboundMessage, content: str) -> None:
+    async def _send_response(
+        self, msg: InboundMessage, content: str, *, progress: bool = False,
+    ) -> None:
         """Send a response back to the channel."""
         response = OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=content,
+            metadata={"_progress": progress},
         )
         await self.bus.publish_outbound(response)
