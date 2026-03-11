@@ -2,33 +2,48 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
 from loguru import logger
 from mcp import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
 
 class MCPClient:
     """Client for NocoDB MCP server using HTTP streamable transport."""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, tool_timeout: int = 30):
         """Initialize MCP client.
 
         Args:
             url: MCP server URL (e.g., http://ncdbmcp.lab/mcp)
+            tool_timeout: Timeout in seconds for individual tool calls
         """
         self.url = url
+        self._tool_timeout = tool_timeout
         self._session: ClientSession | None = None
         self._tools: list[dict[str, Any]] = []
         self._resources: dict[str, str] = {}
+
+    @property
+    def _is_sse(self) -> bool:
+        """Whether the URL indicates SSE transport."""
+        return self.url.rstrip("/").endswith("/sse")
 
     async def connect(self) -> None:
         """Connect to the MCP server and discover tools/resources."""
         logger.info(f"Connecting to MCP server at {self.url}...")
 
-        async with streamablehttp_client(self.url) as (read, write, _):
+        transport_cm = (
+            sse_client(self.url, timeout=3600)
+            if self._is_sse
+            else streamablehttp_client(self.url, timeout=3600)
+        )
+        async with transport_cm as transport:
+            read, write = transport[0], transport[1]
             async with ClientSession(read, write) as session:
                 self._session = session
                 await session.initialize()
@@ -66,10 +81,33 @@ class MCPClient:
         Returns:
             Tool result as string
         """
-        async with streamablehttp_client(self.url) as (read, write, _):
+        transport_cm = (
+            sse_client(self.url, timeout=3600)
+            if self._is_sse
+            else streamablehttp_client(self.url, timeout=3600)
+        )
+        async with transport_cm as transport:
+            read, write = transport[0], transport[1]
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                result = await session.call_tool(name, arguments)
+
+                try:
+                    result = await asyncio.wait_for(
+                        session.call_tool(name, arguments),
+                        timeout=self._tool_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("MCP tool '{}' timed out after {}s", name, self._tool_timeout)
+                    return f"(MCP tool call timed out after {self._tool_timeout}s)"
+                except asyncio.CancelledError:
+                    task = asyncio.current_task()
+                    if task is not None and task.cancelling() > 0:
+                        raise
+                    logger.warning("MCP tool '{}' was cancelled by server/SDK", name)
+                    return "(MCP tool call was cancelled)"
+                except Exception as exc:
+                    logger.exception("MCP tool '{}' failed: {}: {}", name, type(exc).__name__, exc)
+                    return f"(MCP tool call failed: {type(exc).__name__})"
 
                 # Extract text content from result
                 if result.content:
