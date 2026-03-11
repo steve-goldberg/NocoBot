@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from loguru import logger
@@ -25,6 +26,31 @@ class TelegramConfig:
     max_message_length: int = 4096
     rate_limit_messages: int = 10
     rate_limit_window: float = 60.0
+
+
+TELEGRAM_MAX_MESSAGE_LEN = 4000
+
+
+def _split_message(text: str, max_len: int = TELEGRAM_MAX_MESSAGE_LEN) -> list[str]:
+    """Split text into chunks, preferring line breaks, then spaces, then hard cut."""
+    if len(text) <= max_len:
+        return [text]
+    chunks: list[str] = []
+    while text:
+        if len(text) <= max_len:
+            chunks.append(text)
+            break
+        # Try to split at a newline
+        idx = text.rfind('\n', 0, max_len)
+        if idx == -1:
+            # Try to split at a space
+            idx = text.rfind(' ', 0, max_len)
+        if idx == -1:
+            # Hard cut
+            idx = max_len
+        chunks.append(text[:idx])
+        text = text[idx:].lstrip('\n')
+    return chunks
 
 
 def _strip_md(s: str) -> str:
@@ -255,32 +281,92 @@ class TelegramChannel(BaseChannel):
         if not self._app:
             logger.warning("Telegram bot not running")
             return
-        
-        # Stop typing indicator for this chat
-        self._stop_typing(msg.chat_id)
-        
+
         try:
-            # chat_id should be the Telegram chat ID (integer)
             chat_id = int(msg.chat_id)
-            # Convert markdown to Telegram HTML
-            html_content = _markdown_to_telegram_html(msg.content)
+        except ValueError:
+            logger.error(f"Invalid chat_id: {msg.chat_id}")
+            return
+
+        is_progress = msg.metadata.get("_progress", False)
+
+        if is_progress:
+            await self._send_text(chat_id, msg.content)
+        else:
+            self._stop_typing(msg.chat_id)
+            chunks = _split_message(msg.content)
+            for chunk in chunks:
+                await self._send_with_streaming(chat_id, chunk)
+
+    async def _send_text(self, chat_id: int, text: str) -> None:
+        """Send a single message with HTML conversion and plain-text fallback."""
+        try:
+            html_content = _markdown_to_telegram_html(text)
             await self._app.bot.send_message(
                 chat_id=chat_id,
                 text=html_content,
                 parse_mode="HTML"
             )
-        except ValueError:
-            logger.error(f"Invalid chat_id: {msg.chat_id}")
         except Exception as e:
-            # Fallback to plain text if HTML parsing fails
             logger.warning(f"HTML parse failed, falling back to plain text: {e}")
             try:
                 await self._app.bot.send_message(
-                    chat_id=int(msg.chat_id),
-                    text=msg.content
+                    chat_id=chat_id,
+                    text=text
                 )
             except Exception as e2:
                 logger.error(f"Error sending Telegram message: {e2}")
+
+    async def _send_with_streaming(self, chat_id: int, text: str) -> None:
+        """Progressively reveal text via send_message + edit_message_text."""
+        steps = 8
+        length = len(text)
+
+        if length < 80:
+            await self._send_text(chat_id, text)
+            return
+
+        step_size = length // steps
+        # Send the first slice
+        first_end = step_size
+        try:
+            html_slice = _markdown_to_telegram_html(text[:first_end])
+            sent = await self._app.bot.send_message(
+                chat_id=chat_id,
+                text=html_slice,
+                parse_mode="HTML"
+            )
+        except Exception:
+            await self._send_text(chat_id, text)
+            return
+
+        # Progressively edit with longer slices
+        for i in range(2, steps):
+            await asyncio.sleep(0.05)
+            end = step_size * i
+            try:
+                html_slice = _markdown_to_telegram_html(text[:end])
+                await self._app.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=sent.message_id,
+                    text=html_slice,
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+
+        # Final edit with full text
+        await asyncio.sleep(0.15)
+        try:
+            html_full = _markdown_to_telegram_html(text)
+            await self._app.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=sent.message_id,
+                text=html_full,
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
     
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
