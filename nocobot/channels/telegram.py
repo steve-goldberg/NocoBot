@@ -203,7 +203,6 @@ class TelegramChannel(BaseChannel):
         super().__init__(config, bus)
         self.config: TelegramConfig = config
         self._app: Application | None = None
-        self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
         self._typing_tasks: dict[str, asyncio.Task] = {}  # chat_id -> typing loop task
         self._media_group_buffers: dict[str, dict] = {}  # group_id -> buffered parts
         self._media_group_tasks: dict[str, asyncio.Task] = {}  # group_id -> flush task
@@ -433,9 +432,6 @@ class TelegramChannel(BaseChannel):
         sender_id = str(user.id)
         if user.username:
             sender_id = f"{sender_id}|{user.username}"
-        
-        # Store chat_id for replies
-        self._chat_ids[sender_id] = chat_id
         
         # Build content from text and/or media
         content_parts = []

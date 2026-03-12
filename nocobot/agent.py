@@ -41,6 +41,8 @@ class AgentLoop:
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
         self._session_tasks: dict[str, asyncio.Task] = {}
+        self._session_last_active: dict[str, float] = {}
+        self._last_eviction: float = 0.0
 
         # In-memory conversation history per chat_id
         self._history: dict[str, list[dict[str, Any]]] = {}
@@ -75,6 +77,10 @@ class AgentLoop:
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
             except asyncio.TimeoutError:
+                now = time.monotonic()
+                if now - self._last_eviction > 60.0:
+                    self._evict_stale_sessions()
+                    self._last_eviction = now
                 continue
             except Exception as e:
                 logger.error(f"Agent error: {e}")
@@ -95,7 +101,23 @@ class AgentLoop:
             logger.info(f"Cancelled active task for {msg.session_key}")
         self._history.pop(msg.session_key, None)
         self._session_locks.pop(msg.session_key, None)
+        self._session_last_active.pop(msg.session_key, None)
         await self._send_response(msg, "Stopped. Conversation cleared.")
+
+    def _evict_stale_sessions(self, max_idle: float = 3600.0) -> None:
+        """Remove sessions idle longer than max_idle seconds."""
+        now = time.monotonic()
+        stale = [
+            key for key, last in self._session_last_active.items()
+            if now - last > max_idle
+        ]
+        for key in stale:
+            self._history.pop(key, None)
+            self._session_locks.pop(key, None)
+            self._session_tasks.pop(key, None)
+            self._session_last_active.pop(key, None)
+        if stale:
+            logger.info(f"Evicted {len(stale)} stale sessions")
 
     async def _handle_with_guard(self, msg: InboundMessage) -> None:
         """Process a message with per-session lock, semaphore, timeout, and error handling."""
@@ -129,11 +151,13 @@ class AgentLoop:
 
     async def _process_message(self, msg: InboundMessage) -> None:
         """Process an inbound message."""
+        self._session_last_active[msg.session_key] = time.monotonic()
         logger.debug(f"Processing message from {msg.sender_id}: {msg.content[:50]}...")
 
         # Handle /new command - clear history
         if msg.content.strip() == "/new":
             self._history.pop(msg.session_key, None)
+            self._session_last_active.pop(msg.session_key, None)
             await self._send_response(msg, "Conversation cleared. Starting fresh!")
             return
 

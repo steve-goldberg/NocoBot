@@ -24,10 +24,15 @@ class TokenBucket:
 
         # {key: (tokens_remaining, last_refill_time)}
         self._buckets: dict[str, tuple[float, float]] = {}
+        self._last_cleanup: float = 0.0
 
     def consume(self, key: str) -> bool:
         """Try to consume one token for the given key."""
         now = time.monotonic()
+
+        if now - self._last_cleanup > 60.0:
+            self.cleanup()
+            self._last_cleanup = now
 
         if key in self._buckets:
             tokens, last_time = self._buckets[key]
