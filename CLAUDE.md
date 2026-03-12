@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Monorepo with two deployable services for NocoDB integration:
+NocoBot monorepo — Telegram bot with NocoDB MCP agent, plus the bundled Python SDK:
 
 1. **nocodb/** - Python SDK + MCP Server + CLI for NocoDB API (self-hosted community edition)
 2. **nocobot/** - Telegram bot with NocoDB MCP agent integration
@@ -87,7 +87,7 @@ python -m nocobot
 ## Directory Structure
 
 ```
-nocodb-py/                        # Monorepo root
+nocobot/                          # Monorepo root
 ├── nocodb/                       # Service 1: NocoDB MCP Server (Dokploy: /nocodb/)
 │   ├── __init__.py               # Package exports, version (3.1.0)
 │   ├── __main__.py               # Entry point for `python -m nocodb`

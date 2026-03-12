@@ -15,7 +15,7 @@ CLI for NocoDB v3 API. Self-hosted community edition.
 
 ```bash
 # Install
-uv pip install git+https://github.com/steve-goldberg/nocodb-py.git
+uv pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb
 
 # Config (~/.nocodb.toml)
 url = "http://localhost:8080"

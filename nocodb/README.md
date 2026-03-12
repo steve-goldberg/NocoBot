@@ -1,4 +1,4 @@
-<h1 align="center">nocodb-py</h1>
+<h1 align="center">nocodb</h1>
 
 <h2 align="center"><strong>The Complete Python Toolkit for NocoDB</strong></h2>
 
@@ -41,10 +41,10 @@
 
 ```bash
 # SDK only
-pip install git+https://github.com/steve-goldberg/nocodb-py.git
+pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb
 
 # With CLI + MCP server
-pip install "nocodb-py[cli,mcp] @ git+https://github.com/steve-goldberg/nocodb-py.git"
+pip install "nocodb[cli,mcp] @ git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb"
 ```
 
 ### 2. Configure
