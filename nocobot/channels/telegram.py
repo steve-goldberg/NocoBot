@@ -301,7 +301,10 @@ class TelegramChannel(BaseChannel):
         reply_params = None
         reply_to_id = msg.metadata.get("message_id")
         if reply_to_id is not None:
-            reply_params = ReplyParameters(message_id=reply_to_id)
+            reply_params = ReplyParameters(
+                message_id=reply_to_id,
+                allow_sending_without_reply=True,
+            )
 
         if is_progress:
             await self._send_text(chat_id, msg.content, reply_params=reply_params)
