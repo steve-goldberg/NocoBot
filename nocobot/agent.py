@@ -38,6 +38,7 @@ class AgentLoop:
         self.max_tokens_budget = max_tokens_budget
         self._running = False
         self._semaphore = asyncio.Semaphore(3)
+        self._session_locks: dict[str, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
 
         # In-memory conversation history per chat_id
@@ -81,29 +82,31 @@ class AgentLoop:
         logger.info("Agent loop stopped")
 
     async def _handle_with_guard(self, msg: InboundMessage) -> None:
-        """Process a message with semaphore, timeout, and error handling."""
-        async with self._semaphore:
-            try:
-                await asyncio.wait_for(
-                    self._process_message(msg),
-                    timeout=self.message_timeout,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"Message processing timed out after {self.message_timeout}s "
-                    f"for {msg.session_key}"
-                )
-                await self._send_response(
-                    msg,
-                    "Sorry, that request took too long to process. "
-                    "Try a simpler request or start fresh with /new."
-                )
-            except Exception as e:
-                logger.error(f"Error processing message: {e}")
-                await self._send_response(
-                    msg,
-                    "Something went wrong processing your request. Please try again."
-                )
+        """Process a message with per-session lock, semaphore, timeout, and error handling."""
+        lock = self._session_locks.setdefault(msg.session_key, asyncio.Lock())
+        async with lock:
+            async with self._semaphore:
+                try:
+                    await asyncio.wait_for(
+                        self._process_message(msg),
+                        timeout=self.message_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"Message processing timed out after {self.message_timeout}s "
+                        f"for {msg.session_key}"
+                    )
+                    await self._send_response(
+                        msg,
+                        "Sorry, that request took too long to process. "
+                        "Try a simpler request or start fresh with /new."
+                    )
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}")
+                    await self._send_response(
+                        msg,
+                        "Something went wrong processing your request. Please try again."
+                    )
 
     async def _process_message(self, msg: InboundMessage) -> None:
         """Process an inbound message."""
