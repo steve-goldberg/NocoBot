@@ -31,6 +31,7 @@ class MCPClient:
         self._stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
         self._connected: bool = False
+        self._lock = asyncio.Lock()
         self._tools: list[dict[str, Any]] = []
         self._resources: dict[str, str] = {}
 
@@ -49,18 +50,26 @@ class MCPClient:
         """Return the persistent session, reconnecting if needed."""
         if self._session is not None and self._connected:
             return self._session
-        await self._close()
-        stack = AsyncExitStack()
-        await stack.__aenter__()
-        transport = await stack.enter_async_context(self._open_transport())
-        read, write = transport[0], transport[1]
-        session = await stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
-        self._stack = stack
-        self._session = session
-        self._connected = True
-        logger.info("MCP session established to {}", self.url)
-        return session
+        async with self._lock:
+            # Double-check after acquiring lock
+            if self._session is not None and self._connected:
+                return self._session
+            await self._close()
+            stack = AsyncExitStack()
+            await stack.__aenter__()
+            try:
+                transport = await stack.enter_async_context(self._open_transport())
+                read, write = transport[0], transport[1]
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+            except BaseException:
+                await stack.aclose()
+                raise
+            self._stack = stack
+            self._session = session
+            self._connected = True
+            logger.info("MCP session established to {}", self.url)
+            return session
 
     async def _close(self) -> None:
         """Tear down the current session and stack."""
@@ -123,12 +132,14 @@ class MCPClient:
                 timeout=self._tool_timeout,
             )
         except asyncio.TimeoutError:
+            self._connected = False
             logger.warning("MCP tool '{}' timed out after {}s", name, self._tool_timeout)
             return f"(MCP tool call timed out after {self._tool_timeout}s)"
         except asyncio.CancelledError:
             task = asyncio.current_task()
             if task is not None and task.cancelling() > 0:
                 raise
+            self._connected = False
             logger.warning("MCP tool '{}' was cancelled by server/SDK", name)
             return "(MCP tool call was cancelled)"
         except Exception as exc:
