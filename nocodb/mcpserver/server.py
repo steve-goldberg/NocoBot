@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastmcp import FastMCP
+from fastmcp.server.transforms import ResourcesAsTools
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -36,6 +37,9 @@ mcp = FastMCP(
     "NocoDB",
     lifespan=lifespan,
 )
+
+# Expose resources as tools for clients that only support tools (e.g. mcp-remote)
+mcp.add_transform(ResourcesAsTools(mcp))
 
 
 # =============================================================================

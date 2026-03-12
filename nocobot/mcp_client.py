@@ -176,8 +176,8 @@ class MCPClient:
 
     def get_system_prompt(self) -> str:
         """Build system prompt from MCP resources."""
-        workflow = self.get_resource("nocodb://workflow-guide")
-        reference = self.get_resource("nocodb://reference")
+        workflow = self.get_resource("nocodb://schema-discovery-rules")
+        reference = self.get_resource("nocodb://tools-reference")
 
         parts = [
             "You are NocoBot, a Telegram assistant that manages NocoDB databases.",
@@ -206,6 +206,11 @@ class MCPClient:
             "",
             "Do NOT claim other limitations. If you're unsure whether you can do something,",
             "try it. The tool will tell you if it fails.",
+            "",
+            "## Reference Tools (call on-demand via read_resource)",
+            "- `nocodb://schema-discovery-rules` — CALL FIRST before any query",
+            "- `nocodb://tools-reference` — All 62 tools, field types, filter syntax",
+            "- `nocodb://formula-reference` — Formula functions and operators",
             "",
             "## Rules",
             "1. **Always discover schema first** — call `fields_list` before using sort/where",
