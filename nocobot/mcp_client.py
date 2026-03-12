@@ -49,13 +49,14 @@ class MCPClient:
         return streamablehttp_client(self.url, headers=self._headers, timeout=3600)
 
     async def _ensure_session(self) -> ClientSession:
-        """Return the persistent session, reconnecting if needed."""
+        """Return the persistent session, reconnecting and re-discovering tools if needed."""
         if self._session is not None and self._connected:
             return self._session
         async with self._lock:
             # Double-check after acquiring lock
             if self._session is not None and self._connected:
                 return self._session
+            reconnecting = self._tools != []  # Had tools before → reconnect
             await self._close()
             stack = AsyncExitStack()
             await stack.__aenter__()
@@ -71,6 +72,8 @@ class MCPClient:
             self._session = session
             self._connected = True
             logger.info("MCP session established to {}", self.url)
+            if reconnecting:
+                await self._discover(session)
             return session
 
     async def _close(self) -> None:
@@ -88,13 +91,8 @@ class MCPClient:
         """Public cleanup — call during bot shutdown."""
         await self._close()
 
-    async def connect(self) -> None:
-        """Connect to the MCP server and discover tools/resources."""
-        logger.info("Connecting to MCP server at {}...", self.url)
-
-        session = await self._ensure_session()
-
-        # Discover tools
+    async def _discover(self, session: ClientSession) -> None:
+        """Discover and cache tools and resources from the MCP server."""
         tools_result = await session.list_tools()
         self._tools = [
             {
@@ -109,13 +107,19 @@ class MCPClient:
         ]
         logger.info("Discovered {} MCP tools", len(self._tools))
 
-        # Discover and cache resources
         resources_result = await session.list_resources()
+        self._resources = {}
         for resource in resources_result.resources:
             content = await session.read_resource(resource.uri)
             if content.contents:
                 self._resources[str(resource.uri)] = content.contents[0].text
         logger.info("Cached {} MCP resources", len(self._resources))
+
+    async def connect(self) -> None:
+        """Connect to the MCP server and discover tools/resources."""
+        logger.info("Connecting to MCP server at {}...", self.url)
+        session = await self._ensure_session()
+        await self._discover(session)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Call an MCP tool.
