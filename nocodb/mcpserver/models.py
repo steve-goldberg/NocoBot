@@ -362,3 +362,16 @@ class BaseSchemaResult:
     title: str
     tables: list[dict[str, Any]]
     description: str | None = None
+
+
+# =============================================================================
+# Formula Generation
+# =============================================================================
+
+@dataclass
+class FormulaGenerateResult:
+    """Result from AI-powered formula generation."""
+    formula: str
+    explanation: str
+    examples: list[str] = field(default_factory=list)
+    model: str = ""

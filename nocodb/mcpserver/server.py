@@ -74,6 +74,7 @@ from .tools import (  # noqa: E402, F401
     storage,
     export,
     schema,
+    formula,
 )
 
 # Import resources module to register resources with the server
