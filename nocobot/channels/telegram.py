@@ -204,6 +204,8 @@ class TelegramChannel(BaseChannel):
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
         self._typing_tasks: dict[str, asyncio.Task] = {}  # chat_id -> typing loop task
+        self._media_group_buffers: dict[str, dict] = {}  # group_id -> buffered parts
+        self._media_group_tasks: dict[str, asyncio.Task] = {}  # group_id -> flush task
     
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
@@ -265,6 +267,12 @@ class TelegramChannel(BaseChannel):
         """Stop the Telegram bot."""
         self._running = False
         
+        # Cancel media group flush tasks
+        for task in self._media_group_tasks.values():
+            task.cancel()
+        self._media_group_tasks.clear()
+        self._media_group_buffers.clear()
+
         # Cancel all typing indicators
         for chat_id in list(self._typing_tasks):
             self._stop_typing(chat_id)
@@ -464,30 +472,75 @@ class TelegramChannel(BaseChannel):
                 logger.error(f"Failed to download media: {e}")
                 content_parts.append(f"[{media_type}: download failed]")
         
-        content = "\n".join(content_parts) if content_parts else "[empty message]"
-        
-        logger.debug(f"Telegram message from {sender_id}: {content[:50]}...")
-        
         str_chat_id = str(chat_id)
-        
+        metadata = {
+            "message_id": message.message_id,
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "is_group": message.chat.type != "private",
+        }
+
+        # Buffer media group messages and flush as one
+        group_id = message.media_group_id
+        if group_id:
+            if group_id not in self._media_group_buffers:
+                self._media_group_buffers[group_id] = {
+                    "sender_id": sender_id,
+                    "chat_id": str_chat_id,
+                    "content_parts": [],
+                    "media_paths": [],
+                    "metadata": metadata,
+                }
+            buf = self._media_group_buffers[group_id]
+            buf["content_parts"].extend(content_parts)
+            buf["media_paths"].extend(media_paths)
+            # Restart the debounce timer
+            old_task = self._media_group_tasks.pop(group_id, None)
+            if old_task and not old_task.done():
+                old_task.cancel()
+            self._media_group_tasks[group_id] = asyncio.create_task(
+                self._flush_media_group(group_id)
+            )
+            return
+
+        content = "\n".join(content_parts) if content_parts else "[empty message]"
+        logger.debug(f"Telegram message from {sender_id}: {content[:50]}...")
+
         # Start typing indicator before processing
         self._start_typing(str_chat_id)
-        
+
         # Forward to the message bus
         await self._handle_message(
             sender_id=sender_id,
             chat_id=str_chat_id,
             content=content,
             media=media_paths,
-            metadata={
-                "message_id": message.message_id,
-                "user_id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "is_group": message.chat.type != "private"
-            }
+            metadata=metadata,
         )
     
+    async def _flush_media_group(self, group_id: str) -> None:
+        """Wait for all media group messages to arrive, then forward as one."""
+        try:
+            await asyncio.sleep(0.6)
+        except asyncio.CancelledError:
+            return
+        buf = self._media_group_buffers.pop(group_id, None)
+        self._media_group_tasks.pop(group_id, None)
+        if not buf:
+            return
+        content = "\n".join(buf["content_parts"]) if buf["content_parts"] else "[empty message]"
+        chat_id = buf["chat_id"]
+        logger.debug(f"Flushing media group {group_id}: {len(buf['media_paths'])} files")
+        self._start_typing(chat_id)
+        await self._handle_message(
+            sender_id=buf["sender_id"],
+            chat_id=chat_id,
+            content=content,
+            media=buf["media_paths"],
+            metadata=buf["metadata"],
+        )
+
     def _start_typing(self, chat_id: str) -> None:
         """Start sending 'typing...' indicator for a chat."""
         # Cancel any existing typing task for this chat
