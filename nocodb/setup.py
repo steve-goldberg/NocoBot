@@ -1,11 +1,19 @@
+import re
+from pathlib import Path
+
 from setuptools import setup
+
+
+def get_version():
+    init = Path(__file__).parent / "__init__.py"
+    return re.search(r'__version__\s*=\s*"([^"]+)"', init.read_text()).group(1)
 
 
 # When building from nocodb/ folder, packages are in current directory
 # We need to map them to nocodb.* namespace for imports like "from nocodb.mcpserver import ..."
 setup(
    name='nocodb',
-   version='3.0.0',
+   version=get_version(),
    author='Steve Goldberg',
    author_email='',
    packages=['nocodb', 'nocodb.mcpserver', 'nocodb.mcpserver.tools', 'nocodb.cli', 'nocodb.filters', 'nocodb.infra'],
