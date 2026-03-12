@@ -27,6 +27,10 @@ class Config(BaseSettings):
     # Input validation
     max_message_length: int = 4096
 
+    # Media file limits
+    media_max_file_size: int = 20_971_520      # 20 MB per file
+    media_max_total_size: int = 524_288_000     # 500 MB total media dir cap
+
     # Per-user rate limiting
     rate_limit_messages: int = 10
     rate_limit_window: float = 60.0

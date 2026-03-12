@@ -38,6 +38,8 @@ async def main() -> None:
         max_message_length=config.max_message_length,
         rate_limit_messages=config.rate_limit_messages,
         rate_limit_window=config.rate_limit_window,
+        media_max_file_size=config.media_max_file_size,
+        media_max_total_size=config.media_max_total_size,
     )
     telegram = TelegramChannel(telegram_config, bus)
 

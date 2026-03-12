@@ -26,9 +26,24 @@ class TelegramConfig:
     max_message_length: int = 4096
     rate_limit_messages: int = 10
     rate_limit_window: float = 60.0
+    media_max_file_size: int = 20_971_520      # 20 MB
+    media_max_total_size: int = 524_288_000     # 500 MB
 
 
 TELEGRAM_MAX_MESSAGE_LEN = 4000
+
+
+def _enforce_dir_cap(media_dir: "Path", max_total: int) -> None:
+    """Delete oldest files until directory is under max_total bytes."""
+    from pathlib import Path
+    files = [f for f in media_dir.iterdir() if f.is_file()]
+    files.sort(key=lambda f: f.stat().st_mtime)
+    total = sum(f.stat().st_size for f in files)
+    while total > max_total and files:
+        oldest = files.pop(0)
+        total -= oldest.stat().st_size
+        oldest.unlink()
+        logger.debug(f"Deleted oldest media file: {oldest.name}")
 
 
 def _split_message(text: str, max_len: int = TELEGRAM_MAX_MESSAGE_LEN) -> list[str]:
@@ -464,21 +479,31 @@ class TelegramChannel(BaseChannel):
         if media_file and self._app:
             try:
                 file = await self._app.bot.get_file(media_file.file_id)
-                ext = self._get_extension(media_type, getattr(media_file, 'mime_type', None))
-                
-                # Save to workspace/media/
-                from pathlib import Path
-                media_dir = Path.home() / ".nocobot" / "media"
-                media_dir.mkdir(parents=True, exist_ok=True)
-                
-                file_path = media_dir / f"{media_file.file_id[:16]}{ext}"
-                await file.download_to_drive(str(file_path))
-                
-                media_paths.append(str(file_path))
-                
-                content_parts.append(f"[{media_type}: {file_path}]")
-                    
-                logger.debug(f"Downloaded {media_type} to {file_path}")
+
+                # Check file size before downloading
+                max_size = self.config.media_max_file_size
+                if file.file_size and file.file_size > max_size:
+                    size_mb = file.file_size / 1_048_576
+                    limit_mb = max_size / 1_048_576
+                    content_parts.append(
+                        f"[{media_type}: too large ({size_mb:.1f} MB, limit {limit_mb:.0f} MB)]"
+                    )
+                    logger.warning(f"Rejected {media_type} ({size_mb:.1f} MB) from {sender_id}")
+                else:
+                    ext = self._get_extension(media_type, getattr(media_file, 'mime_type', None))
+
+                    from pathlib import Path
+                    media_dir = Path.home() / ".nocobot" / "media"
+                    media_dir.mkdir(parents=True, exist_ok=True)
+
+                    file_path = media_dir / f"{media_file.file_id}{ext}"
+                    await file.download_to_drive(str(file_path))
+
+                    media_paths.append(str(file_path))
+                    content_parts.append(f"[{media_type}: {file_path}]")
+                    logger.debug(f"Downloaded {media_type} to {file_path}")
+
+                    _enforce_dir_cap(media_dir, self.config.media_max_total_size)
             except Exception as e:
                 logger.error(f"Failed to download media: {e}")
                 content_parts.append(f"[{media_type}: download failed]")
