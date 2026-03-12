@@ -11,6 +11,19 @@
 
 ---
 
+## News
+
+- **2026-03-12** Renamed repo to NocoBot — bot is the main event now
+- **2026-02-14** nocobot — Telegram bot with NocoDB MCP agent integration
+- **2026-02-14** Monorepo restructure for independent Dokploy deployment
+- **2026-02-13** Auto-generated CLI via FastMCP generate-cli
+- **2026-02-12** Doc tools for mcp-remote compatibility
+- **2026-02-11** FastMCP 3.0 upgrade with Streamable HTTP transport
+- **2026-02-11** Schema export tools and workflow prompts
+- **2026-02-11** Dokploy deployment guide for remote MCP
+
+---
+
 ## What is NocoBot?
 
 NocoBot is a Telegram bot that lets you query and manage your self-hosted NocoDB databases using natural language. Ask it to list tables, create records, update fields, or export data — it figures out the right API calls and does it for you.
@@ -49,7 +62,7 @@ Under the hood, NocoBot connects an LLM (Claude, GPT, or any OpenRouter model) t
 
 ```bash
 # Install
-pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocobot
+pip install git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocobot
 
 # Configure
 export TELEGRAM_TOKEN="your-telegram-bot-token"
@@ -65,7 +78,7 @@ python -m nocobot
 
 ```bash
 # Install with MCP server
-pip install "nocodb[cli,mcp] @ git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb"
+pip install "nocodb[cli,mcp] @ git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocodb"
 
 # Configure
 export NOCODB_URL="http://localhost:8080"

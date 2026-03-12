@@ -26,7 +26,7 @@ Deploy the NocoDB MCP Server to Dokploy as an HTTP service that can be accessed 
 1. Inside the project, click **+ Add Service** → **Application**
 2. Choose **GitHub** as source
 3. Connect your GitHub account if not already connected
-4. Select repository: `your-username/nocobot`
+4. Select repository: `your-username/NocoBot`
 5. Branch: `master` (or feature branch)
 6. Build Path: `/` (repo root - required for monorepo)
 

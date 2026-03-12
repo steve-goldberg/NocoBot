@@ -26,7 +26,7 @@ setup(
        'nocodb.infra': 'infra',
    },
    license='AGPL-3.0',
-   url='https://github.com/steve-goldberg/nocobot',
+   url='https://github.com/steve-goldberg/NocoBot',
    classifiers=[
        "Programming Language :: Python :: 3",
        "License :: OSI Approved :: GNU Affero General Public License v3",

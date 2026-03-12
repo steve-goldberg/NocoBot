@@ -6,13 +6,13 @@ Complete Python client for NocoDB API (self-hosted community edition).
 
 ```bash
 # Using uv (recommended)
-uv pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb
+uv pip install git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocodb
 
 # Using pip
-pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb
+pip install git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocodb
 
 # From source
-git clone https://github.com/steve-goldberg/nocobot.git
+git clone https://github.com/steve-goldberg/NocoBot.git
 cd nocobot/nocodb
 pip install -e .
 ```

@@ -46,7 +46,7 @@ Deploy nocobot (Telegram bot + NocoDB MCP agent) to Dokploy as a standalone serv
 
 1. Inside the project, click **+ Add Service** → **Application**
 2. Choose **GitHub** as source
-3. Select repository: `your-username/nocobot`
+3. Select repository: `your-username/NocoBot`
 4. Branch: `master` (or feature branch)
 5. Build Path: `/` (repo root - required for monorepo)
 

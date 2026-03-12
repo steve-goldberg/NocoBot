@@ -41,10 +41,10 @@
 
 ```bash
 # SDK only
-pip install git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb
+pip install git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocodb
 
 # With CLI + MCP server
-pip install "nocodb[cli,mcp] @ git+https://github.com/steve-goldberg/nocobot.git#subdirectory=nocodb"
+pip install "nocodb[cli,mcp] @ git+https://github.com/steve-goldberg/NocoBot.git#subdirectory=nocodb"
 ```
 
 ### 2. Configure
