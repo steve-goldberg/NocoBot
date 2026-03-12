@@ -372,8 +372,15 @@ class TelegramChannel(BaseChannel):
         """Handle /start command."""
         if not update.message or not update.effective_user:
             return
-        
+
         user = update.effective_user
+        sender_id = str(user.id)
+        if user.username:
+            sender_id = f"{sender_id}|{user.username}"
+        if not self.is_allowed(sender_id):
+            logger.warning(f"Denied /start from {sender_id}")
+            await update.message.reply_text("Sorry, you are not authorized to use this bot.")
+            return
         await update.message.reply_text(
             f"Hi {user.first_name}! I'm nocobot - your NocoDB assistant.\n\n"
             "Send me a message and I'll help you work with your NocoDB data!\n"

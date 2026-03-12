@@ -18,6 +18,11 @@ async def main() -> None:
     # Load configuration
     config = load_config()
     logger.info("Configuration loaded")
+    if not config.telegram_allow_from:
+        logger.warning(
+            "TELEGRAM_ALLOW_FROM is empty - all messages will be rejected. "
+            "Set it to a JSON list of Telegram user IDs to allow access."
+        )
 
     # Initialize components
     bus = MessageBus()
