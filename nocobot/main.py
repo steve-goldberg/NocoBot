@@ -97,6 +97,7 @@ async def main() -> None:
     logger.info("Shutting down...")
     await telegram.stop()
     await agent.stop()
+    await mcp.close()
     bus.stop()
 
     for task in tasks:

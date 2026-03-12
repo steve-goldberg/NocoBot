@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from contextlib import AsyncExitStack
 from typing import Any
 
 from loguru import logger
@@ -13,7 +13,11 @@ from mcp.client.streamable_http import streamablehttp_client
 
 
 class MCPClient:
-    """Client for NocoDB MCP server using HTTP streamable transport."""
+    """Client for NocoDB MCP server using HTTP streamable transport.
+
+    Maintains a persistent MCP session via AsyncExitStack, reconnecting
+    lazily if the session dies (e.g. server restart).
+    """
 
     def __init__(self, url: str, tool_timeout: int = 30):
         """Initialize MCP client.
@@ -24,7 +28,9 @@ class MCPClient:
         """
         self.url = url
         self._tool_timeout = tool_timeout
+        self._stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
+        self._connected: bool = False
         self._tools: list[dict[str, Any]] = []
         self._resources: dict[str, str] = {}
 
@@ -33,43 +39,72 @@ class MCPClient:
         """Whether the URL indicates SSE transport."""
         return self.url.rstrip("/").endswith("/sse")
 
+    def _open_transport(self):
+        """Create the appropriate transport context manager."""
+        if self._is_sse:
+            return sse_client(self.url, timeout=3600)
+        return streamablehttp_client(self.url, timeout=3600)
+
+    async def _ensure_session(self) -> ClientSession:
+        """Return the persistent session, reconnecting if needed."""
+        if self._session is not None and self._connected:
+            return self._session
+        await self._close()
+        stack = AsyncExitStack()
+        await stack.__aenter__()
+        transport = await stack.enter_async_context(self._open_transport())
+        read, write = transport[0], transport[1]
+        session = await stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()
+        self._stack = stack
+        self._session = session
+        self._connected = True
+        logger.info("MCP session established to {}", self.url)
+        return session
+
+    async def _close(self) -> None:
+        """Tear down the current session and stack."""
+        if self._stack:
+            try:
+                await self._stack.aclose()
+            except (RuntimeError, BaseExceptionGroup):
+                pass  # MCP SDK cancel scope cleanup noise
+            self._stack = None
+        self._session = None
+        self._connected = False
+
+    async def close(self) -> None:
+        """Public cleanup — call during bot shutdown."""
+        await self._close()
+
     async def connect(self) -> None:
         """Connect to the MCP server and discover tools/resources."""
-        logger.info(f"Connecting to MCP server at {self.url}...")
+        logger.info("Connecting to MCP server at {}...", self.url)
 
-        transport_cm = (
-            sse_client(self.url, timeout=3600)
-            if self._is_sse
-            else streamablehttp_client(self.url, timeout=3600)
-        )
-        async with transport_cm as transport:
-            read, write = transport[0], transport[1]
-            async with ClientSession(read, write) as session:
-                self._session = session
-                await session.initialize()
+        session = await self._ensure_session()
 
-                # Discover tools
-                tools_result = await session.list_tools()
-                self._tools = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description or "",
-                            "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                        }
-                    }
-                    for tool in tools_result.tools
-                ]
-                logger.info(f"Discovered {len(self._tools)} MCP tools")
+        # Discover tools
+        tools_result = await session.list_tools()
+        self._tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
+                }
+            }
+            for tool in tools_result.tools
+        ]
+        logger.info("Discovered {} MCP tools", len(self._tools))
 
-                # Discover and cache resources
-                resources_result = await session.list_resources()
-                for resource in resources_result.resources:
-                    content = await session.read_resource(resource.uri)
-                    if content.contents:
-                        self._resources[str(resource.uri)] = content.contents[0].text
-                logger.info(f"Cached {len(self._resources)} MCP resources")
+        # Discover and cache resources
+        resources_result = await session.list_resources()
+        for resource in resources_result.resources:
+            content = await session.read_resource(resource.uri)
+            if content.contents:
+                self._resources[str(resource.uri)] = content.contents[0].text
+        logger.info("Cached {} MCP resources", len(self._resources))
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Call an MCP tool.
@@ -81,39 +116,31 @@ class MCPClient:
         Returns:
             Tool result as string
         """
-        transport_cm = (
-            sse_client(self.url, timeout=3600)
-            if self._is_sse
-            else streamablehttp_client(self.url, timeout=3600)
-        )
-        async with transport_cm as transport:
-            read, write = transport[0], transport[1]
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        try:
+            session = await self._ensure_session()
+            result = await asyncio.wait_for(
+                session.call_tool(name, arguments),
+                timeout=self._tool_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("MCP tool '{}' timed out after {}s", name, self._tool_timeout)
+            return f"(MCP tool call timed out after {self._tool_timeout}s)"
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            if task is not None and task.cancelling() > 0:
+                raise
+            logger.warning("MCP tool '{}' was cancelled by server/SDK", name)
+            return "(MCP tool call was cancelled)"
+        except Exception as exc:
+            self._connected = False
+            logger.exception("MCP tool '{}' failed: {}: {}", name, type(exc).__name__, exc)
+            return f"(MCP tool call failed: {type(exc).__name__})"
 
-                try:
-                    result = await asyncio.wait_for(
-                        session.call_tool(name, arguments),
-                        timeout=self._tool_timeout,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("MCP tool '{}' timed out after {}s", name, self._tool_timeout)
-                    return f"(MCP tool call timed out after {self._tool_timeout}s)"
-                except asyncio.CancelledError:
-                    task = asyncio.current_task()
-                    if task is not None and task.cancelling() > 0:
-                        raise
-                    logger.warning("MCP tool '{}' was cancelled by server/SDK", name)
-                    return "(MCP tool call was cancelled)"
-                except Exception as exc:
-                    logger.exception("MCP tool '{}' failed: {}: {}", name, type(exc).__name__, exc)
-                    return f"(MCP tool call failed: {type(exc).__name__})"
-
-                # Extract text content from result
-                if result.content:
-                    texts = [c.text for c in result.content if hasattr(c, 'text')]
-                    return "\n".join(texts)
-                return ""
+        # Extract text content from result
+        if result.content:
+            texts = [c.text for c in result.content if hasattr(c, 'text')]
+            return "\n".join(texts)
+        return ""
 
     def get_tools_for_llm(self) -> list[dict[str, Any]]:
         """Get tools in OpenAI function-calling format."""
