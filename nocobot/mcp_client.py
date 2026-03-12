@@ -134,24 +134,30 @@ class MCPClient:
         except asyncio.TimeoutError:
             self._connected = False
             logger.warning("MCP tool '{}' timed out after {}s", name, self._tool_timeout)
-            return f"(MCP tool call timed out after {self._tool_timeout}s)"
+            return "Tool timed out. Please try a simpler request."
         except asyncio.CancelledError:
             task = asyncio.current_task()
             if task is not None and task.cancelling() > 0:
                 raise
             self._connected = False
             logger.warning("MCP tool '{}' was cancelled by server/SDK", name)
-            return "(MCP tool call was cancelled)"
+            return "Tool call was cancelled."
         except Exception as exc:
             self._connected = False
             logger.exception("MCP tool '{}' failed: {}: {}", name, type(exc).__name__, exc)
-            return f"(MCP tool call failed: {type(exc).__name__})"
+            return "Tool call failed. Please try a different approach."
 
         # Extract text content from result
+        text = ""
         if result.content:
             texts = [c.text for c in result.content if hasattr(c, 'text')]
-            return "\n".join(texts)
-        return ""
+            text = "\n".join(texts)
+
+        if result.isError:
+            logger.warning("MCP tool '{}' returned error: {}", name, text)
+            return "Tool returned an error. Please try a different approach."
+
+        return text
 
     def get_tools_for_llm(self) -> list[dict[str, Any]]:
         """Get tools in OpenAI function-calling format."""

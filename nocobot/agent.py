@@ -299,7 +299,7 @@ class AgentLoop:
             return result
         except Exception as e:
             logger.exception("Tool execution failed: %s", tc.name)
-            return f"Tool error: {type(e).__name__}"
+            return "Tool execution failed. Please try a different approach."
 
     async def _send_response(
         self, msg: InboundMessage, content: str, *, progress: bool = False,
