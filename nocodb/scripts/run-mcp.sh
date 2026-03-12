@@ -13,4 +13,4 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # Run the MCP server
-exec python -m nocodb.mcp
+exec python -m nocodb.mcpserver

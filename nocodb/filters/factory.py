@@ -1,4 +1,4 @@
-from ..nocodb import WhereFilter
+from ..core import WhereFilter
 
 from .raw_filter import RawTemplateFilter
 

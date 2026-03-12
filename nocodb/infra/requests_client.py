@@ -1,7 +1,7 @@
 import base64
 import warnings
 from typing import Optional, List, Dict, Any, Union
-from ..nocodb import (
+from ..core import (
     NocoDBClient,
     NocoDBBase,
     AuthToken,

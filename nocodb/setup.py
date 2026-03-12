@@ -1,12 +1,30 @@
-from setuptools import setup, find_packages
+import re
+from pathlib import Path
+
+from setuptools import setup
 
 
+def get_version():
+    init = Path(__file__).parent / "__init__.py"
+    return re.search(r'__version__\s*=\s*"([^"]+)"', init.read_text()).group(1)
+
+
+# When building from nocodb/ folder, packages are in current directory
+# We need to map them to nocodb.* namespace for imports like "from nocodb.mcpserver import ..."
 setup(
    name='nocodb',
-   version='3.0.0',
+   version=get_version(),
    author='Steve Goldberg',
    author_email='',
-   packages=find_packages(),
+   packages=['nocodb', 'nocodb.mcpserver', 'nocodb.mcpserver.tools', 'nocodb.cli', 'nocodb.filters', 'nocodb.infra'],
+   package_dir={
+       'nocodb': '.',
+       'nocodb.mcpserver': 'mcpserver',
+       'nocodb.mcpserver.tools': 'mcpserver/tools',
+       'nocodb.cli': 'cli',
+       'nocodb.filters': 'filters',
+       'nocodb.infra': 'infra',
+   },
    license='AGPL-3.0',
    url='https://github.com/steve-goldberg/nocodb-py',
    classifiers=[
@@ -24,14 +42,14 @@ setup(
        "cli": [
            # CLI is now auto-generated from MCP server
            # Uses cyclopts (via fastmcp) instead of typer
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.2",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
        "mcp": [
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.2",
        ],
        "all": [
-           "fastmcp>=3.0.0rc1",
+           "fastmcp>=3.0.2",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
    },

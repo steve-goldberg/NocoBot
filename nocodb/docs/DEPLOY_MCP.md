@@ -26,9 +26,9 @@ Deploy the NocoDB MCP Server to Dokploy as an HTTP service that can be accessed 
 1. Inside the project, click **+ Add Service** → **Application**
 2. Choose **GitHub** as source
 3. Connect your GitHub account if not already connected
-4. Select repository: `your-username/nocodb` (or wherever the code lives)
-5. Branch: `nocodb-mcp` (or `master` after merging)
-6. Build Path: `/` (root of repo)
+4. Select repository: `your-username/nocodb-py`
+5. Branch: `master` (or feature branch)
+6. Build Path: `/` (repo root - required for monorepo)
 
 ---
 
@@ -39,8 +39,10 @@ Go to **General** tab:
 | Setting | Value |
 |---------|-------|
 | Build Type | Dockerfile |
-| Dockerfile Path | `Dockerfile` |
-| Build Context | `.` |
+| Docker File | `nocodb/Dockerfile` |
+| Docker Context Path | `nocodb` |
+
+**Important:** This is a monorepo. Build Path stays at `/` while Docker File and Context point to the `nocodb/` subdirectory.
 
 ---
 
@@ -114,7 +116,7 @@ Step 4/8 : COPY . .
 Step 5/8 : RUN uv pip install --system -e ".[mcp]"
 Step 6/8 : ENV MCP_PORT=8000
 Step 7/8 : ENV MCP_HOST=0.0.0.0
-Step 8/8 : CMD ["python", "-m", "nocodb.mcp", "--http"]
+Step 8/8 : CMD ["python", "-m", "nocodb.mcpserver", "--http"]
 ```
 
 ### Expected Runtime Output
@@ -236,7 +238,7 @@ https://mcp-nocodb.yourdomain.com/mcp
   "mcpServers": {
     "nocodb": {
       "command": "/bin/bash",
-      "args": ["-c", "source /Users/username/Code/Utils/nocodb/.env && python3 -m nocodb.mcp"]
+      "args": ["-c", "source /Users/username/Code/Utils/nocodb/.env && python3 -m nocodb.mcpserver"]
     }
   }
 }
@@ -274,8 +276,7 @@ https://mcp-nocodb.yourdomain.com/mcp
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Build image with Python 3.12 + uv + FastMCP |
-| `docker-compose.yml` | Local testing (not used by Dokploy) |
-| `.env` | Local development only |
-| `nocodb/mcp/__main__.py` | Entry point, handles --http flag |
-| `nocodb/mcp/dependencies.py` | Reads env vars at runtime |
+| `nocodb/Dockerfile` | Build image with Python 3.12 + uv + FastMCP |
+| `nocodb/setup.py` | Package config with namespace mapping |
+| `nocodb/mcpserver/__main__.py` | Entry point, handles --http flag |
+| `nocodb/mcpserver/dependencies.py` | Reads env vars at runtime |

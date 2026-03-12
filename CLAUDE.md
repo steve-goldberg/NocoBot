@@ -4,9 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python client for NocoDB API - **Self-hosted community edition only**.
+Monorepo with two deployable services for NocoDB integration:
 
-**Status:** v3.0.0 - Feature complete (Phase 2 done, 123 tests)
+1. **nocodb/** - Python SDK + MCP Server + CLI for NocoDB API (self-hosted community edition)
+2. **nocobot/** - Telegram bot with NocoDB MCP agent integration
+
+**Dokploy Deployment:**
+- MCP Server: Build Path = `/nocodb/`
+- Telegram Bot: Build Path = `/nocobot/`
+
+### nocodb SDK
+
+**Status:** v3.1.0 - Feature complete (123 tests)
 
 This client uses a hybrid v2/v3 API approach based on what's available in self-hosted NocoDB:
 - **v3 Data API** - Records CRUD, links, attachments, button actions
@@ -48,13 +57,13 @@ Use `/nocodbv3` skill for NocoDB API documentation when implementing features.
 ## Commands
 
 ```bash
-# Install in development mode
+# Install nocodb SDK in development mode (from repo root)
 python -m venv venv
 source venv/bin/activate
-pip install -e .
+pip install -e nocodb/
 
-# Install with CLI support
-pip install -e ".[cli]"
+# Install with CLI + MCP support
+pip install -e "nocodb/[cli,mcp]"
 
 # Run all tests
 python -m pytest nocodb/ -v
@@ -62,94 +71,107 @@ python -m pytest nocodb/ -v
 # Run single test file
 python -m pytest nocodb/filters/filters_test.py -v
 
-# Run specific test
-python -m pytest nocodb/filters/filters_test.py::test_or_filter -v
+# Run MCP server (stdio)
+python -m nocodb.mcpserver
+
+# Run MCP server (HTTP for deployment)
+python -m nocodb.mcpserver --http --port 8000
+
+# Install nocobot (from repo root)
+pip install -e nocobot/
+
+# Run nocobot
+python -m nocobot
 ```
 
 ## Directory Structure
 
 ```
-nocodb-api-v3-client/
-├── nocodb/
-│   ├── __init__.py           # Package exports, version (3.0.0)
-│   ├── __main__.py           # Entry point for `python -m nocodb`
-│   ├── nocodb.py             # Core domain models (NocoDBBase, NocoDBClient, WhereFilter)
-│   ├── api.py                # URI builders (v2/v3)
-│   ├── exceptions.py         # Custom exceptions
-│   ├── utils.py              # Utility functions
-│   ├── schema_utils.py       # Schema export utilities (portable schema extraction)
+nocodb-py/                        # Monorepo root
+├── nocodb/                       # Service 1: NocoDB MCP Server (Dokploy: /nocodb/)
+│   ├── __init__.py               # Package exports, version (3.1.0)
+│   ├── __main__.py               # Entry point for `python -m nocodb`
+│   ├── core.py                   # Core domain models (NocoDBBase, NocoDBClient, WhereFilter)
+│   ├── api.py                    # URI builders (v2/v3)
+│   ├── exceptions.py             # Custom exceptions
+│   ├── utils.py                  # Utility functions
+│   ├── schema_utils.py           # Schema export utilities
+│   ├── Dockerfile                # MCP server Docker image
+│   ├── setup.py                  # Package config with package_dir mapping
+│   ├── README.md                 # Service documentation
 │   ├── cli/
-│   │   ├── __init__.py       # CLI package exports
-│   │   ├── __main__.py       # Entry point for `python -m nocodb.cli`
-│   │   ├── main.py           # Entry point, handles `init` command
-│   │   ├── config.py         # Config file (~/.nocodbrc) and env handling
-│   │   ├── wrapper.py        # Config injection, command aliases, param mapping
-│   │   ├── generated.py      # Auto-generated CLI (62 commands from MCP server)
-│   │   └── SKILL.md          # Agent skill documentation for CLI
-│   ├── mcp/                  # MCP Server (FastMCP 3.0)
-│   │   ├── __init__.py       # Package exports
-│   │   ├── __main__.py       # Entry point for `python -m nocodb.mcp`
-│   │   ├── server.py         # FastMCP server with lifespan
-│   │   ├── dependencies.py   # Config loading, client factory (NOCODB_URL, NOCODB_TOKEN, etc.)
-│   │   ├── errors.py         # ToolError wrapper for NocoDBAPIError
-│   │   ├── models.py         # Response dataclasses
-│   │   ├── prompts.py        # MCP prompts (workflow guide, reference docs)
-│   │   └── tools/            # 16 tool modules (60 tools total):
-│   │       ├── records.py    # records_list, record_get, records_create, etc.
-│   │       ├── bases.py      # bases_list, base_info
-│   │       ├── tables.py     # tables_list, table_get, table_create, etc.
-│   │       ├── fields.py     # fields_list, field_create, field_update_options, etc.
-│   │       ├── links.py      # linked_records_list, link, unlink
-│   │       ├── views.py      # views_list, view_update, view_delete
-│   │       ├── view_filters.py   # view_filters_list, create, update, delete
-│   │       ├── view_sorts.py     # view_sorts_list, create, update, delete
-│   │       ├── view_columns.py   # view_columns_list, update, hide_all, show_all
-│   │       ├── shared_views.py   # shared_views_list, create, update, delete
-│   │       ├── webhooks.py       # webhooks_list, delete, logs, sample
-│   │       ├── members.py        # members_list, add, update, remove
-│   │       ├── attachments.py    # attachment_upload
-│   │       ├── storage.py        # storage_upload
-│   │       ├── export.py         # export_csv
-│   │       ├── schema.py         # schema_export_table, schema_export_base
-│   │       └── docs.py           # get_workflow_guide, get_reference (for mcp-remote)
+│   │   ├── __init__.py           # CLI package exports
+│   │   ├── __main__.py           # Entry point for `python -m nocodb.cli`
+│   │   ├── main.py               # Entry point, handles `init` command
+│   │   ├── config.py             # Config file (~/.nocodbrc) and env handling
+│   │   ├── wrapper.py            # Config injection, command aliases
+│   │   ├── generated.py          # Auto-generated CLI (62 commands)
+│   │   └── skill.md              # Agent skill documentation
+│   ├── mcpserver/                # MCP Server (FastMCP 3.0)
+│   │   ├── __init__.py           # Package exports
+│   │   ├── __main__.py           # Entry point for `python -m nocodb.mcpserver`
+│   │   ├── server.py             # FastMCP server with lifespan
+│   │   ├── dependencies.py       # Config loading, client factory
+│   │   ├── errors.py             # ToolError wrapper
+│   │   ├── models.py             # Response dataclasses
+│   │   ├── resources.py          # MCP resources
+│   │   └── tools/                # 16 tool modules (62 tools total)
+│   │       ├── records.py, bases.py, tables.py, fields.py
+│   │       ├── links.py, views.py, view_filters.py, view_sorts.py
+│   │       ├── view_columns.py, shared_views.py, webhooks.py
+│   │       ├── members.py, attachments.py, storage.py
+│   │       └── export.py, schema.py, docs.py
 │   ├── filters/
-│   │   ├── __init__.py       # Filter exports (EqFilter, IsFilter, InFilter, BetweenFilter, etc.)
-│   │   ├── factory.py        # basic_filter_class_factory()
-│   │   ├── logical.py        # And, Or, Not operators
-│   │   ├── raw_filter.py     # RawFilter for custom strings
-│   │   └── *_test.py         # Colocated unit tests (filters_test, factory_test, logical_test)
-│   └── infra/
-│       ├── __init__.py
-│       ├── requests_client.py      # HTTP client (v2/v3 methods, verify_ssl support)
-│       └── requests_client_test.py # Unit tests (130 tests)
-├── skills/                   # Claude Code skills
-│   ├── cli/
-│   │   └── nocodb-v3-cli-skill.md  # NocoDB CLI reference skill
-│   └── mcp/
-│       ├── nocodb-mcp-prompt.md    # MCP server system prompt
-│       ├── schema-design.md        # Schema design helper
-│       └── schema-export.md        # Schema export helper
-├── scripts/
-│   └── regenerate-cli.sh    # Regenerate CLI after MCP tool changes
-├── docs/
-│   ├── DOKPLOY_DEPLOYMENT.md # Dokploy deployment guide for MCP server
-│   ├── CONTRIBUTING.md       # Contribution guidelines
-│   ├── MIGRATION.md          # v2/v3 API reference
-│   └── pr-overview.md        # PR description generator
-├── .github/                  # GitHub templates
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── ISSUE_TEMPLATE/
-├── Dockerfile                # MCP server Docker image
-├── docker-compose.yml        # Local Docker testing
-├── setup.py                  # Package config
-└── README.md                 # User documentation
+│   │   ├── __init__.py           # Filter exports
+│   │   ├── factory.py            # basic_filter_class_factory()
+│   │   ├── logical.py            # And, Or, Not operators
+│   │   ├── raw_filter.py         # RawFilter
+│   │   └── *_test.py             # Colocated unit tests
+│   ├── infra/
+│   │   ├── __init__.py
+│   │   ├── requests_client.py    # HTTP client (v2/v3 methods)
+│   │   └── requests_client_test.py
+│   ├── docs/
+│   │   ├── CLI.md, SDK.md, MCP.md, FILTERS.md
+│   │   ├── DOKPLOY_DEPLOYMENT.md, CONTRIBUTING.md, MIGRATION.md
+│   │   └── bugs/, tasks/
+│   ├── scripts/
+│   │   ├── regenerate-cli.sh     # Regenerate CLI after MCP changes
+│   │   └── run-mcp.sh            # Run MCP server locally
+│   └── skills/
+│       ├── cli/nocodb-v3-cli-skill.md
+│       └── mcp/nocodb-mcp-prompt.md, schema-design.md
+├── nocobot/                      # Service 2: Telegram Bot (Dokploy: /nocobot/)
+│   ├── __init__.py               # Package version
+│   ├── __main__.py               # Entry point
+│   ├── main.py                   # Wires Telegram, agent, MCP client
+│   ├── agent.py                  # Agent loop with LLM + MCP tools
+│   ├── mcp_client.py             # MCP HTTP streamable client
+│   ├── config.py                 # pydantic-settings config
+│   ├── Dockerfile                # Bot Docker image
+│   ├── pyproject.toml            # Package config
+│   ├── bus/
+│   │   ├── events.py             # InboundMessage, OutboundMessage
+│   │   └── queue.py              # MessageBus async queue
+│   ├── channels/
+│   │   ├── base.py               # BaseChannel abstract
+│   │   └── telegram.py           # Telegram channel implementation
+│   └── providers/
+│       ├── base.py               # LLMProvider abstract
+│       ├── litellm_provider.py   # OpenRouter via LiteLLM
+│       └── registry.py           # Provider registry
+├── README.md                     # Main repo documentation
+├── CLAUDE.md                     # Claude Code guidance
+├── .github/                      # GitHub templates
+├── tests/                        # Integration tests
+└── .gitignore
 ```
 
 ## Architecture
 
 ### Module Structure
 
-- `nocodb/nocodb.py` - Core domain models and abstract interfaces
+- `nocodb/core.py` - Core domain models and abstract interfaces
   - `AuthToken`, `APIToken`, `JWTAuthToken` - Authentication classes
   - `NocoDBBase` - Base identifier for v2/v3 API
   - `NocoDBClient` - Abstract client interface with method signatures
@@ -172,7 +194,7 @@ nocodb-api-v3-client/
   - `main.py` - Entry point, handles `init` command only
   - `config.py` - Config file loading (~/.nocodbrc), env vars (NOCODB_URL, NOCODB_TOKEN)
   - `wrapper.py` - Config injection, command aliases (`records list` → `call-tool records_list`), param mapping
-  - `generated.py` - Auto-generated from MCP server (62 tool commands), regenerate with `scripts/regenerate-cli.sh`
+  - `generated.py` - Auto-generated from MCP server (62 tool commands), regenerate with `nocodb/scripts/regenerate-cli.sh`
 
 - `nocodb/filters/` - Query filter system
   - `__init__.py` - Filter classes: `EqFilter`, `LikeFilter`, `IsFilter`, `InFilter`, `BetweenFilter`
@@ -180,14 +202,23 @@ nocodb-api-v3-client/
   - `factory.py` - `basic_filter_class_factory()` for creating custom filters
   - `raw_filter.py` - `RawFilter` for custom filter strings
 
-- `nocodb/mcp/` - MCP Server (FastMCP 3.0)
+- `nocodb/mcpserver/` - MCP Server (FastMCP 3.0)
   - `server.py` - FastMCP server with 62 tools + 2 prompts exposing all SDK functionality + `/health` endpoint
   - `dependencies.py` - Environment-based config (NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID, NOCODB_VERIFY_SSL)
-  - `prompts.py` - MCP prompts: `nocodb_workflow` (schema discovery rules), `nocodb_reference` (full docs)
+  - `resources.py` - MCP resources: `nocodb_workflow` (schema discovery rules), `nocodb_reference` (full docs)
   - `tools/` - 17 tool modules for records, bases, tables, fields, views, webhooks, schema export, docs, etc.
   - Supports both stdio (local) and HTTP (remote deployment) transports
   - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 3.0)
-  - See `docs/DOKPLOY_DEPLOYMENT.md` for Docker/Dokploy deployment
+  - See `nocodb/docs/DOKPLOY_DEPLOYMENT.md` for Docker/Dokploy deployment
+
+- `nocobot/` - Telegram Bot with NocoDB MCP Agent
+  - `main.py` - Entry point, wires Telegram channel, agent loop, MCP client
+  - `agent.py` - Agent loop processing messages with LLM + MCP tools
+  - `mcp_client.py` - MCP HTTP streamable client connecting to nocodb MCP server
+  - `config.py` - pydantic-settings based configuration
+  - `bus/` - Async message bus (InboundMessage, OutboundMessage, MessageBus)
+  - `channels/telegram.py` - Telegram bot implementation using python-telegram-bot
+  - `providers/litellm_provider.py` - OpenRouter LLM provider via LiteLLM
 
 ### Not Supported (Enterprise Only)
 

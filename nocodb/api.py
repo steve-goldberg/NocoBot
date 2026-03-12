@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional
 from urllib.parse import urljoin
-from .nocodb import NocoDBBase
+from .core import NocoDBBase
 
 
 class NocoDBAPIUris(Enum):

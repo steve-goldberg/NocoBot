@@ -27,7 +27,7 @@ Configure in `~/.config/claude/claude_desktop_config.json`:
   "mcpServers": {
     "nocodb": {
       "command": "/bin/bash",
-      "args": ["-c", "source /path/to/.env && python3 -m nocodb.mcp"],
+      "args": ["-c", "source /path/to/.env && python3 -m nocodb.mcpserver"],
       "env": {
         "NOCODB_URL": "http://localhost:8080",
         "NOCODB_TOKEN": "your-api-token",
@@ -57,7 +57,7 @@ docker run -p 8000:8000 \
 
 ### Dokploy
 
-See [DOKPLOY_DEPLOYMENT.md](DOKPLOY_DEPLOYMENT.md) for full deployment guide.
+See [DEPLOY_MCP.md](DEPLOY_MCP.md) for full deployment guide.
 
 ### Connect Claude Desktop to Remote Server
 
@@ -192,4 +192,4 @@ When running in HTTP mode:
 
 - [SDK](SDK.md) - Python client library
 - [CLI](CLI.md) - Command-line interface
-- [Dokploy Deployment](DOKPLOY_DEPLOYMENT.md) - Full deployment guide
+- [Dokploy Deployment](DEPLOY_MCP.md) - Full deployment guide

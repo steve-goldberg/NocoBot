@@ -2,7 +2,7 @@ import pytest
 
 from .. import filters
 
-from ..nocodb import WhereFilter
+from ..core import WhereFilter
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,4 @@
-from ..nocodb import WhereFilter
+from ..core import WhereFilter
 
 
 class RawFilter(WhereFilter):

@@ -1,5 +1,5 @@
 from typing import List
-from ..nocodb import WhereFilter
+from ..core import WhereFilter
 
 
 class Or(WhereFilter):

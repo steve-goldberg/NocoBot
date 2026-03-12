@@ -1,0 +1,60 @@
+[
+  {
+    "id": "BUG-001",
+    "name": "view-columns-update-500",
+    "description": "views columns update endpoint returns 500 error (NocoDB server-side bug)",
+    "category": "integration",
+    "priority": 3,
+    "status": "open",
+    "symptoms": [
+      "PATCH /api/v2/meta/views/{viewId}/columns/{columnId} returns HTTP 500",
+      "Cannot hide/show individual columns via API",
+      "CLI 'views columns update' command fails"
+    ],
+    "hypotheses": [
+      "NocoDB v2 API bug in self-hosted community edition",
+      "Endpoint may require enterprise features",
+      "API may have changed in recent NocoDB versions"
+    ],
+    "report_file": "BUG-001-view-columns-update-500.md",
+    "created": "2026-01-24",
+    "related_features": [],
+    "workaround": "Use views columns hide-all / show-all which work correctly, or use NocoDB UI"
+  },
+  {
+    "id": "BUG-002",
+    "name": "export-error-missing-status-code",
+    "description": "NocoDBAPIError raised without required status_code in export_view(), causes TypeError at runtime",
+    "category": "backend",
+    "priority": 1,
+    "status": "open",
+    "symptoms": [
+      "TypeError when export job fails or times out",
+      "NocoDBAPIError.__init__() missing required positional argument"
+    ],
+    "hypotheses": [
+      "status_code param was added to exception class after export code was written"
+    ],
+    "report_file": "BUG-002-export-error-missing-status-code.md",
+    "created": "2026-01-27",
+    "related_features": []
+  },
+  {
+    "id": "BUG-003",
+    "name": "export-print-error-missing-json",
+    "description": "Export command does not pass as_json to print_error, breaking JSON output on errors",
+    "category": "backend",
+    "priority": 3,
+    "status": "open",
+    "symptoms": [
+      "nocodb export --json outputs plain text errors instead of JSON",
+      "Inconsistent error format compared to all other commands"
+    ],
+    "hypotheses": [
+      "as_json parameter was overlooked when export command was added"
+    ],
+    "report_file": "BUG-003-export-print-error-missing-json.md",
+    "created": "2026-01-27",
+    "related_features": []
+  }
+]

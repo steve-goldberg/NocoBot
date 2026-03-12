@@ -16,4 +16,4 @@ ENV MCP_HOST=0.0.0.0
 EXPOSE 8000
 
 # Run HTTP server
-CMD ["python", "-m", "nocodb.mcp", "--http"]
+CMD ["python", "-m", "nocodb.mcpserver", "--http"]

@@ -1,6 +1,6 @@
 __version__ = "3.1.0"
 
-from .nocodb import (
+from .core import (
     NocoDBBase,
     AuthToken,
     APIToken,

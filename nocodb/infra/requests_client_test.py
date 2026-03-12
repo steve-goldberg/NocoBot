@@ -7,7 +7,7 @@ import requests
 
 from .requests_client import NocoDBRequestsClient, requests as requests_lib
 from ..exceptions import NocoDBAPIError
-from ..nocodb import APIToken
+from ..core import APIToken
 
 
 @mock.patch.object(requests_lib, "Session")

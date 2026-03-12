@@ -1,6 +1,6 @@
 from .factory import basic_filter_class_factory
 from .logical import And, Not, Or
-from ..nocodb import WhereFilter
+from ..core import WhereFilter
 from typing import List, Union
 
 
