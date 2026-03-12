@@ -261,10 +261,14 @@ class AgentLoop:
         self, msg: InboundMessage, content: str, *, progress: bool = False,
     ) -> None:
         """Send a response back to the channel."""
+        metadata: dict[str, Any] = {"_progress": progress}
+        reply_to_id = msg.metadata.get("message_id")
+        if reply_to_id is not None:
+            metadata["message_id"] = reply_to_id
         response = OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=content,
-            metadata={"_progress": progress},
+            metadata=metadata,
         )
         await self.bus.publish_outbound(response)

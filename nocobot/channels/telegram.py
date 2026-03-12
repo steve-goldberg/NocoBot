@@ -8,7 +8,7 @@ import time
 import unicodedata
 from dataclasses import dataclass
 from loguru import logger
-from telegram import BotCommand, Update
+from telegram import BotCommand, ReplyParameters, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
@@ -298,40 +298,48 @@ class TelegramChannel(BaseChannel):
 
         is_progress = msg.metadata.get("_progress", False)
 
+        reply_params = None
+        reply_to_id = msg.metadata.get("message_id")
+        if reply_to_id is not None:
+            reply_params = ReplyParameters(message_id=reply_to_id)
+
         if is_progress:
-            await self._send_text(chat_id, msg.content)
+            await self._send_text(chat_id, msg.content, reply_params=reply_params)
         else:
             self._stop_typing(msg.chat_id)
             chunks = _split_message(msg.content)
-            for chunk in chunks:
-                await self._send_with_streaming(chat_id, chunk)
+            for i, chunk in enumerate(chunks):
+                rp = reply_params if i == 0 else None
+                await self._send_with_streaming(chat_id, chunk, reply_params=rp)
 
-    async def _send_text(self, chat_id: int, text: str) -> None:
+    async def _send_text(self, chat_id: int, text: str, *, reply_params=None) -> None:
         """Send a single message with HTML conversion and plain-text fallback."""
         try:
             html_content = _markdown_to_telegram_html(text)
             await self._app.bot.send_message(
                 chat_id=chat_id,
                 text=html_content,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_parameters=reply_params,
             )
         except Exception as e:
             logger.warning(f"HTML parse failed, falling back to plain text: {e}")
             try:
                 await self._app.bot.send_message(
                     chat_id=chat_id,
-                    text=text
+                    text=text,
+                    reply_parameters=reply_params,
                 )
             except Exception as e2:
                 logger.error(f"Error sending Telegram message: {e2}")
 
-    async def _send_with_streaming(self, chat_id: int, text: str) -> None:
+    async def _send_with_streaming(self, chat_id: int, text: str, *, reply_params=None) -> None:
         """Progressively reveal text via send_message + edit_message_text."""
         steps = 8
         length = len(text)
 
         if length < 80:
-            await self._send_text(chat_id, text)
+            await self._send_text(chat_id, text, reply_params=reply_params)
             return
 
         step_size = length // steps
@@ -342,10 +350,11 @@ class TelegramChannel(BaseChannel):
             sent = await self._app.bot.send_message(
                 chat_id=chat_id,
                 text=html_slice,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_parameters=reply_params,
             )
         except Exception:
-            await self._send_text(chat_id, text)
+            await self._send_text(chat_id, text, reply_params=reply_params)
             return
 
         # Progressively edit with longer slices
@@ -403,6 +412,7 @@ class TelegramChannel(BaseChannel):
             sender_id=str(update.effective_user.id),
             chat_id=str(update.message.chat_id),
             content=update.message.text,
+            metadata={"message_id": update.message.message_id},
         )
     
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
