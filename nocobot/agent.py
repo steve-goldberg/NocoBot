@@ -40,6 +40,7 @@ class AgentLoop:
         self._semaphore = asyncio.Semaphore(3)
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
+        self._session_tasks: dict[str, asyncio.Task] = {}
 
         # In-memory conversation history per chat_id
         self._history: dict[str, list[dict[str, Any]]] = {}
@@ -66,7 +67,11 @@ class AgentLoop:
                     self.bus.consume_inbound(),
                     timeout=1.0
                 )
+                if msg.content.strip() == "/stop":
+                    await self._handle_stop(msg)
+                    continue
                 task = asyncio.create_task(self._handle_with_guard(msg))
+                self._session_tasks[msg.session_key] = task
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
             except asyncio.TimeoutError:
@@ -79,7 +84,18 @@ class AgentLoop:
         self._running = False
         for task in list(self._tasks):
             task.cancel()
+        self._session_tasks.clear()
         logger.info("Agent loop stopped")
+
+    async def _handle_stop(self, msg: InboundMessage) -> None:
+        """Cancel active processing for a session. Bypasses session lock."""
+        task = self._session_tasks.pop(msg.session_key, None)
+        if task and not task.done():
+            task.cancel()
+            logger.info(f"Cancelled active task for {msg.session_key}")
+        self._history.pop(msg.session_key, None)
+        self._session_locks.pop(msg.session_key, None)
+        await self._send_response(msg, "Stopped. Conversation cleared.")
 
     async def _handle_with_guard(self, msg: InboundMessage) -> None:
         """Process a message with per-session lock, semaphore, timeout, and error handling."""
@@ -91,6 +107,9 @@ class AgentLoop:
                         self._process_message(msg),
                         timeout=self.message_timeout,
                     )
+                except asyncio.CancelledError:
+                    logger.info(f"Task cancelled for {msg.session_key}")
+                    raise
                 except asyncio.TimeoutError:
                     logger.warning(
                         f"Message processing timed out after {self.message_timeout}s "
@@ -129,6 +148,7 @@ class AgentLoop:
                 "- Manage views, filters, and sorts\n\n"
                 "Commands:\n"
                 "/new - Start a new conversation\n"
+                "/stop - Stop the current operation\n"
                 "/help - Show this help message\n\n"
                 "Just tell me what you want to do with your NocoDB data!"
             )
