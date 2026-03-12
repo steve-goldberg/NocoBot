@@ -11,16 +11,22 @@
 
 ---
 
-## News
+## 📰 News
 
-- **2026-03-12** Renamed repo to NocoBot — bot is the main event now
-- **2026-02-14** nocobot — Telegram bot with NocoDB MCP agent integration
-- **2026-02-14** Monorepo restructure for independent Dokploy deployment
-- **2026-02-13** Auto-generated CLI via FastMCP generate-cli
-- **2026-02-12** Doc tools for mcp-remote compatibility
-- **2026-02-11** FastMCP 3.0 upgrade with Streamable HTTP transport
-- **2026-02-11** Schema export tools and workflow prompts
-- **2026-02-11** Dokploy deployment guide for remote MCP
+- **2026-03-12** 🏷️ Renamed repo to NocoBot — bot takes the spotlight
+- **2026-03-12** 🛡️ Security lockdown: default-deny access, API key leak prevention, error sanitization
+- **2026-03-12** ⚡ Persistent MCP sessions with lazy reconnect — no more per-call handshakes
+- **2026-03-12** 💬 Progressive text streaming and markdown table rendering in Telegram
+- **2026-03-12** 🔧 Rate limiting, session management, and media handling (photos/voice/docs)
+- **2026-03-12** 🐛 Hardened nocobot: 12 issues closed, 25+ fixes shipped
+- **2026-02-15** 🔄 FastMCP 3.0.2 upgrade, CLI env var passthrough fix
+- **2026-02-14** 🤖 nocobot — Telegram bot with NocoDB MCP agent integration
+- **2026-02-14** 📦 Monorepo restructure for independent Dokploy deployment
+- **2026-02-13** ⌨️ Auto-generated CLI via FastMCP generate-cli
+- **2026-02-12** 📚 Doc tools for mcp-remote compatibility
+- **2026-02-11** 🚀 FastMCP 3.0 upgrade with Streamable HTTP transport
+- **2026-02-11** 📦 Schema export tools and workflow prompts
+- **2026-02-11** 🐳 Dokploy deployment guide for remote MCP
 
 ---
 
