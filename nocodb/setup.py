@@ -25,6 +25,7 @@ setup(
        'nocodb.filters': 'filters',
        'nocodb.infra': 'infra',
    },
+   package_data={'nocodb': ['mcpserver/content/*.md']},
    license='AGPL-3.0',
    url='https://github.com/steve-goldberg/NocoBot',
    classifiers=[
