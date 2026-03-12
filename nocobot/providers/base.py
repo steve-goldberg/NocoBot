@@ -55,6 +55,19 @@ class LLMProvider(ABC):
         "temporarily unavailable",
     )
 
+    @staticmethod
+    def _safe_error_content(exc: Exception) -> str:
+        """Return error content safe for LLMResponse (no secrets).
+
+        Preserves enough info for _is_transient_error() classification.
+        """
+        exc_type = type(exc).__name__
+        raw = str(exc).lower()
+        for marker in LLMProvider._TRANSIENT_ERROR_MARKERS:
+            if marker in raw:
+                return f"LLM request failed ({exc_type}: {marker})"
+        return f"LLM request failed ({exc_type})"
+
     def __init__(self, api_key: str | None = None, api_base: str | None = None):
         self.api_key = api_key
         self.api_base = api_base
@@ -109,8 +122,9 @@ class LLMProvider(ABC):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                logger.exception("LLM chat error (attempt %d)", attempt)
                 response = LLMResponse(
-                    content=f"Error calling LLM: {exc}",
+                    content=self._safe_error_content(exc),
                     finish_reason="error",
                 )
 
@@ -139,8 +153,9 @@ class LLMProvider(ABC):
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            logger.exception("LLM chat error (final attempt)")
             return LLMResponse(
-                content=f"Error calling LLM: {exc}",
+                content=self._safe_error_content(exc),
                 finish_reason="error",
             )
 

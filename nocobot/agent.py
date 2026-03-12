@@ -251,9 +251,8 @@ class AgentLoop:
                 result = result[:self._TOOL_RESULT_MAX] + "... (truncated)"
             return result
         except Exception as e:
-            error_msg = f"Tool error: {e}"
-            logger.error(error_msg)
-            return error_msg
+            logger.exception("Tool execution failed: %s", tc.name)
+            return f"Tool error: {type(e).__name__}"
 
     async def _send_response(
         self, msg: InboundMessage, content: str, *, progress: bool = False,

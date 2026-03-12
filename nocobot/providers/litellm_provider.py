@@ -4,6 +4,7 @@ import json
 import os
 from typing import Any
 
+from loguru import logger
 import litellm
 from litellm import acompletion
 
@@ -152,9 +153,9 @@ class LiteLLMProvider(LLMProvider):
             response = await acompletion(**kwargs)
             return self._parse_response(response)
         except Exception as e:
-            # Return error as content for graceful handling
+            logger.exception("LiteLLM chat() failed")
             return LLMResponse(
-                content=f"Error calling LLM: {str(e)}",
+                content=self._safe_error_content(e),
                 finish_reason="error",
             )
     
