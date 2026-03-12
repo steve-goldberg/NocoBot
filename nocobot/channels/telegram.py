@@ -606,7 +606,10 @@ class TelegramChannel(BaseChannel):
     
     async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log polling / handler errors instead of silently swallowing them."""
-        logger.error(f"Telegram error: {context.error}")
+        err_str = str(context.error)
+        if self.config.token:
+            err_str = err_str.replace(self.config.token, "[REDACTED]")
+        logger.error("Telegram error: {}", err_str)
 
     def _get_extension(self, media_type: str, mime_type: str | None) -> str:
         """Get file extension based on media type."""
