@@ -17,7 +17,8 @@ from nocobot.providers import LiteLLMProvider, ToolCallRequest
 class AgentLoop:
     """Agent that processes messages using LLM and MCP tools."""
 
-    _TOOL_RESULT_MAX = 500
+    _TOOL_RESULT_MAX = 500             # history storage (save-time)
+    _TOOL_RESULT_INFERENCE_MAX = 4000  # current-turn LLM context (execute-time)
 
     def __init__(
         self,
@@ -182,15 +183,13 @@ class AgentLoop:
         # Get or create conversation history
         history = self._history.setdefault(msg.session_key, [])
 
-        # Add user message to history
-        history.append({"role": "user", "content": msg.content})
-
-        # Trim history to prevent unbounded token growth
-        if len(history) > self.max_history:
-            history[:] = history[-self.max_history:]
-
-        # Build messages for LLM
-        messages = [{"role": "system", "content": self._system_prompt}] + history
+        # Build messages for LLM (user message added to messages, not history yet)
+        messages: list[dict[str, Any]] = (
+            [{"role": "system", "content": self._system_prompt}]
+            + list(history)
+        )
+        skip = len(messages)  # new messages (including user msg) start here
+        messages.append({"role": "user", "content": msg.content})
 
         # Get MCP tools
         tools = self.mcp.get_tools_for_llm()
@@ -232,8 +231,9 @@ class AgentLoop:
             # If no tool calls, we're done
             if not response.has_tool_calls:
                 if response.content:
-                    history.append({"role": "assistant", "content": response.content})
+                    messages.append({"role": "assistant", "content": response.content})
                     await self._send_response(msg, response.content)
+                self._save_turn(history, messages, skip)
                 return
 
             # Check token budget before executing more tool calls
@@ -244,7 +244,8 @@ class AgentLoop:
                 )
                 # Ask LLM to summarize what it has so far
                 summary = response.content or "I used a lot of resources on this request."
-                history.append({"role": "assistant", "content": summary})
+                messages.append({"role": "assistant", "content": summary})
+                self._save_turn(history, messages, skip)
                 await self._send_response(
                     msg,
                     f"{summary}\n\n_(Token budget reached - try /new for a fresh start)_"
@@ -282,20 +283,53 @@ class AgentLoop:
             f"Max iterations ({self.max_iterations}) reached for {msg.session_key} "
             f"total_tokens={total_tokens} elapsed={elapsed:.1f}s"
         )
-        await self._send_response(
-            msg,
+        max_iter_msg = (
             f"I've reached the maximum of {self.max_iterations} iterations "
             f"({elapsed:.0f}s elapsed). Try breaking your request into smaller "
-            f"steps or start fresh with /new.",
+            f"steps or start fresh with /new."
         )
+        messages.append({"role": "assistant", "content": max_iter_msg})
+        self._save_turn(history, messages, skip)
+        await self._send_response(msg, max_iter_msg)
+
+    def _save_turn(
+        self, history: list[dict[str, Any]], messages: list[dict], skip: int,
+    ) -> None:
+        """Persist new messages from the agent loop into session history."""
+        for m in messages[skip:]:
+            entry = dict(m)
+            role, content = entry.get("role"), entry.get("content")
+            if role == "assistant" and not content and not entry.get("tool_calls"):
+                continue
+            if (
+                role == "tool"
+                and isinstance(content, str)
+                and len(content) > self._TOOL_RESULT_MAX
+            ):
+                entry["content"] = (
+                    content[: self._TOOL_RESULT_MAX] + "\n... (truncated)"
+                )
+            history.append(entry)
+        self._trim_history(history)
+
+    def _trim_history(self, history: list[dict[str, Any]]) -> None:
+        """Trim history to max_history, aligned to user turn boundaries."""
+        if len(history) <= self.max_history:
+            return
+        tail = history[-self.max_history :]
+        for i, m in enumerate(tail):
+            if m.get("role") == "user":
+                history[:] = tail[i:]
+                return
+        history[:] = tail
 
     async def _execute_tool(self, tc: ToolCallRequest) -> str:
         """Execute a tool call via MCP."""
         logger.debug(f"Executing tool: {tc.name}")
         try:
             result = await self.mcp.call_tool(tc.name, tc.arguments)
-            if len(result) > self._TOOL_RESULT_MAX:
-                result = result[:self._TOOL_RESULT_MAX] + "... (truncated)"
+            if len(result) > self._TOOL_RESULT_INFERENCE_MAX:
+                result = result[:self._TOOL_RESULT_INFERENCE_MAX] + "\n... (truncated)"
             return result
         except Exception as e:
             logger.exception("Tool execution failed: %s", tc.name)
