@@ -16,26 +16,6 @@ from nocodb.infra.requests_client import NocoDBRequestsClient
 
 
 @dataclass
-class LLMConfig:
-    """Optional LLM config for AI-powered tools (formula generation)."""
-    api_key: str
-    model: str = "anthropic/claude-sonnet-4-5"
-    api_base: str | None = None
-
-    @classmethod
-    def from_env(cls) -> "LLMConfig | None":
-        """Load LLM config from environment. Returns None if not configured."""
-        api_key = os.environ.get("NOCODB_LLM_API_KEY", "")
-        if not api_key:
-            return None
-        return cls(
-            api_key=api_key,
-            model=os.environ.get("NOCODB_LLM_MODEL", "anthropic/claude-sonnet-4-5"),
-            api_base=os.environ.get("NOCODB_LLM_API_BASE") or None,
-        )
-
-
-@dataclass
 class MCPConfig:
     """MCP server configuration loaded from environment."""
     url: str
@@ -97,7 +77,6 @@ def create_client(config: MCPConfig) -> NocoDBRequestsClient:
 # Module-level state for lifespan-managed resources
 _config: Optional[MCPConfig] = None
 _client: Optional[NocoDBRequestsClient] = None
-_llm_config: Optional[LLMConfig] = None
 
 
 def get_config() -> MCPConfig:
@@ -132,11 +111,6 @@ def get_client() -> NocoDBRequestsClient:
     return _client
 
 
-def get_llm_config() -> Optional[LLMConfig]:
-    """Get the optional LLM configuration. Returns None if not configured."""
-    return _llm_config
-
-
 def get_base_id() -> str:
     """Get the configured base ID.
 
@@ -157,12 +131,9 @@ def init_dependencies() -> tuple[MCPConfig, NocoDBRequestsClient]:
     Returns:
         Tuple of (config, client).
     """
-    global _config, _client, _llm_config
+    global _config, _client
     _config = MCPConfig.from_env()
     _client = create_client(_config)
-    _llm_config = LLMConfig.from_env()
-    if _llm_config:
-        print(f"LLM configured: model={_llm_config.model}")
     return _config, _client
 
 
@@ -171,7 +142,6 @@ def cleanup_dependencies() -> None:
 
     Called by server lifespan. Clears module-level state.
     """
-    global _config, _client, _llm_config
+    global _config, _client
     _config = None
     _client = None
-    _llm_config = None

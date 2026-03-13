@@ -17,9 +17,6 @@ pip install -e ".[mcp]"
 | `NOCODB_TOKEN` | Yes | API token or JWT |
 | `NOCODB_BASE_ID` | Yes | Base ID to work with |
 | `NOCODB_VERIFY_SSL` | No | Set to `false` for self-signed certs |
-| `NOCODB_LLM_API_KEY` | No | API key for formula generation tool (LiteLLM) |
-| `NOCODB_LLM_MODEL` | No | LLM model (default: `anthropic/claude-sonnet-4-5`) |
-| `NOCODB_LLM_API_BASE` | No | Custom API base URL (OpenRouter, gateways) |
 
 ## Local Usage (stdio)
 
@@ -167,9 +164,6 @@ Use mcp-remote bridge:
 ### Schema (2 tools)
 - `schema_export_table` - Export table schema
 - `schema_export_base` - Export base schema
-
-### Formula (1 tool)
-- `formula_generate` - Generate NocoDB formula via LLM micro-agent (requires `NOCODB_LLM_API_KEY`)
 
 ## Available Prompts
 

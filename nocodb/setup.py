@@ -49,11 +49,9 @@ setup(
        ],
        "mcp": [
            "fastmcp>=3.0.2",
-           "litellm>=1.0.0",
        ],
        "all": [
            "fastmcp>=3.0.2",
-           "litellm>=1.0.0",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
    },
