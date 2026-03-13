@@ -1,6 +1,6 @@
 # MCP Server
 
-FastMCP 3.0 server exposing 62 tools + 2 prompts for AI assistants like Claude Desktop.
+FastMCP 3.0 server exposing 60 tools + 3 resources for AI assistants like Claude Desktop.
 
 ## Installation
 
@@ -17,6 +17,7 @@ pip install -e ".[mcp]"
 | `NOCODB_TOKEN` | Yes | API token or JWT |
 | `NOCODB_BASE_ID` | Yes | Base ID to work with |
 | `NOCODB_VERIFY_SSL` | No | Set to `false` for self-signed certs |
+| `MCP_API_KEY` | No | API key for client authentication (HTTP only) |
 
 ## Local Usage (stdio)
 
@@ -52,6 +53,7 @@ docker run -p 8000:8000 \
   -e NOCODB_TOKEN=your-token \
   -e NOCODB_BASE_ID=your-base-id \
   -e NOCODB_VERIFY_SSL=false \
+  -e MCP_API_KEY=your-api-key \
   nocodb-mcp
 ```
 
@@ -78,8 +80,9 @@ Use mcp-remote bridge:
 
 ## Available Tools
 
-### Records (6 tools)
+### Records (7 tools)
 - `records_list` - List records with filtering/sorting
+- `records_list_all` - List all records (auto-pagination)
 - `record_get` - Get single record by ID
 - `records_create` - Create records (batch)
 - `records_update` - Update records (batch)
@@ -103,8 +106,8 @@ Use mcp-remote bridge:
 
 ### Links (3 tools)
 - `linked_records_list` - List linked records
-- `link` - Link records
-- `unlink` - Unlink records
+- `linked_records_link` - Link records
+- `linked_records_unlink` - Unlink records
 
 ### Bases (2 tools)
 - `bases_list` - List all bases
@@ -115,14 +118,17 @@ Use mcp-remote bridge:
 - `view_update` - Update view
 - `view_delete` - Delete view
 
-### View Filters (4 tools)
+### View Filters (6 tools)
 - `view_filters_list` - List filters
+- `view_filter_get` - Get filter details
 - `view_filter_create` - Create filter
 - `view_filter_update` - Update filter
 - `view_filter_delete` - Delete filter
+- `view_filter_children` - List child filters in a filter group
 
-### View Sorts (4 tools)
+### View Sorts (5 tools)
 - `view_sorts_list` - List sorts
+- `view_sort_get` - Get sort details
 - `view_sort_create` - Create sort
 - `view_sort_update` - Update sort
 - `view_sort_delete` - Delete sort
@@ -139,12 +145,13 @@ Use mcp-remote bridge:
 - `shared_view_update` - Update shared view
 - `shared_view_delete` - Delete shared view
 
-### Webhooks (5 tools)
+### Webhooks (6 tools)
 - `webhooks_list` - List webhooks
 - `webhook_delete` - Delete webhook
 - `webhook_logs` - Get webhook logs
-- `webhook_sample` - Get sample payload
+- `webhook_sample_payload` - Get sample payload
 - `webhook_filters_list` - List webhook filters
+- `webhook_filter_create` - Create webhook filter
 
 ### Members (4 tools)
 - `members_list` - List base members
@@ -165,15 +172,21 @@ Use mcp-remote bridge:
 - `schema_export_table` - Export table schema
 - `schema_export_base` - Export base schema
 
-## Available Prompts
+## Available Resources
 
-### nocodb_workflow
+Resources provide reference documentation to MCP clients. They are also exposed as tools via the ResourcesAsTools transform for clients that only support tools (e.g., mcp-remote).
 
-Critical rules for schema discovery. Should be called before using sort/where parameters to understand field names and IDs.
+### nocodb://schema-discovery-rules
 
-### nocodb_reference
+Critical rules for schema discovery. Should be read before using sort/where parameters to understand field names and IDs.
+
+### nocodb://tools-reference
 
 Complete reference documentation for all tools, including parameter details and examples.
+
+### nocodb://formula-reference
+
+Complete formula function and operator reference for NocoDB formula fields.
 
 ## HTTP Endpoints
 

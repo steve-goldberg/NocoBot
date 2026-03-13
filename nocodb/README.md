@@ -18,15 +18,15 @@
 - **2026-02-11** 🚀 FastMCP 3.0 upgrade with Streamable HTTP transport
 - **2026-02-11** 📦 Schema export tools and workflow prompts
 - **2026-02-11** 🐳 Dokploy deployment guide for remote MCP
-- **2026-01-26** 🎉 MCP server with 62 tools exposing full SDK
+- **2026-01-26** 🎉 MCP server with 60 tools exposing full SDK
 
 ---
 
 ## Key Features
 
 - 🐍 **Python SDK** - Full v3 Data API + hybrid v2/v3 Meta API
-- 🤖 **MCP Server** - 62 tools for Claude Desktop & AI integrations (FastMCP 3.0)
-- ⌨️ **CLI** - 62 commands auto-generated from MCP server
+- 🤖 **MCP Server** - 60 tools for Claude Desktop & AI integrations (FastMCP 3.0)
+- ⌨️ **CLI** - 60 commands auto-generated from MCP server
 - 🏠 **Self-Hosted First** - Built for community edition
 
 ---
@@ -78,7 +78,7 @@ records = client.records_list_v3(base_id, table_id)
 | [CLI](docs/CLI.md) | Command-line interface usage |
 | [MCP Server](docs/MCP.md) | AI assistant integration |
 | [Filters](docs/FILTERS.md) | Query filter system |
-| [Deployment](docs/DOKPLOY_DEPLOYMENT.md) | Docker/Dokploy deployment |
+| [Deployment](docs/DEPLOY_MCP.md) | Docker/Dokploy deployment |
 
 ---
 

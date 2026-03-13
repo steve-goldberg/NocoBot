@@ -55,7 +55,10 @@ NOCODB_URL=https://your-nocodb-instance.com
 NOCODB_TOKEN=your-api-token-here
 NOCODB_BASE_ID=your-base-id
 NOCODB_VERIFY_SSL=false
+MCP_API_KEY=your-api-key-here
 ```
+
+**Optional:** `MCP_API_KEY` enables bearer token authentication. Generate with `openssl rand -hex 32`. If using with the Telegram bot, set the same key as `NOCODB_MCP_API_KEY` on the bot service.
 
 **IMPORTANT:**
 - Do NOT include `export` prefix
@@ -249,9 +252,10 @@ https://mcp-nocodb.yourdomain.com/mcp
 ## Security Considerations
 
 1. **API Token in Environment**: The token is stored in Dokploy's encrypted environment storage
-2. **SSL Bypass**: Only use `NOCODB_VERIFY_SSL=false` for self-signed certs on trusted networks
-3. **Network Access**: Consider restricting access to the MCP endpoint (firewall, VPN, etc.)
-4. **Token Rotation**: If you regenerate the NocoDB token, update Dokploy env vars and redeploy
+2. **MCP API Key**: Set `MCP_API_KEY` to require bearer token auth on the `/mcp` endpoint (recommended for production)
+3. **SSL Bypass**: Only use `NOCODB_VERIFY_SSL=false` for self-signed certs on trusted networks
+4. **Network Access**: Consider restricting access to the MCP endpoint (firewall, VPN, etc.)
+5. **Token Rotation**: If you regenerate the NocoDB token or MCP API key, update Dokploy env vars and redeploy
 
 ---
 

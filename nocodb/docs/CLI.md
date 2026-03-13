@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-Auto-generated CLI via FastMCP with 62 commands mirroring the MCP server tools.
+Auto-generated CLI via FastMCP with 60 commands mirroring the MCP server tools.
 
 ## Installation
 

@@ -21,7 +21,7 @@ This client uses a hybrid v2/v3 API approach based on what's available in self-h
 - **v3 Data API** - Records CRUD, links, attachments, button actions
 - **v3 Meta API** - Tables, fields, base CRUD, base members
 - **v2 Meta API** - List bases, views (list/update/delete only), view filters/sorts, webhooks (list/delete only)
-- **CLI** - Auto-generated CLI via FastMCP (62 commands from MCP server)
+- **CLI** - Auto-generated CLI via FastMCP (60 commands from MCP server)
 
 Use `/nocodbv3` skill for NocoDB API documentation when implementing features.
 
@@ -105,7 +105,7 @@ nocobot/                          # Monorepo root
 │   │   ├── main.py               # Entry point, handles `init` command
 │   │   ├── config.py             # Config file (~/.nocodbrc) and env handling
 │   │   ├── wrapper.py            # Config injection, command aliases
-│   │   ├── generated.py          # Auto-generated CLI (62 commands)
+│   │   ├── generated.py          # Auto-generated CLI (60 commands)
 │   │   └── skill.md              # Agent skill documentation
 │   ├── mcpserver/                # MCP Server (FastMCP 3.0)
 │   │   ├── __init__.py           # Package exports
@@ -114,13 +114,13 @@ nocobot/                          # Monorepo root
 │   │   ├── dependencies.py       # Config loading, client factory
 │   │   ├── errors.py             # ToolError wrapper
 │   │   ├── models.py             # Response dataclasses
-│   │   ├── resources.py          # MCP resources
-│   │   └── tools/                # 16 tool modules (62 tools total)
+│   │   ├── resources/            # MCP resources (3 markdown files + __init__.py)
+│   │   └── tools/                # 16 tool modules (60 tools total)
 │   │       ├── records.py, bases.py, tables.py, fields.py
 │   │       ├── links.py, views.py, view_filters.py, view_sorts.py
 │   │       ├── view_columns.py, shared_views.py, webhooks.py
 │   │       ├── members.py, attachments.py, storage.py
-│   │       └── export.py, schema.py, docs.py
+│   │       └── export.py, schema.py
 │   ├── filters/
 │   │   ├── __init__.py           # Filter exports
 │   │   ├── factory.py            # basic_filter_class_factory()
@@ -133,7 +133,7 @@ nocobot/                          # Monorepo root
 │   │   └── requests_client_test.py
 │   ├── docs/
 │   │   ├── CLI.md, SDK.md, MCP.md, FILTERS.md
-│   │   ├── DOKPLOY_DEPLOYMENT.md, CONTRIBUTING.md, MIGRATION.md
+│   │   ├── DEPLOY_MCP.md, CONTRIBUTING.md, MIGRATION.md
 │   │   └── bugs/, tasks/
 │   ├── scripts/
 │   │   ├── regenerate-cli.sh     # Regenerate CLI after MCP changes
@@ -194,7 +194,7 @@ nocobot/                          # Monorepo root
   - `main.py` - Entry point, handles `init` command only
   - `config.py` - Config file loading (~/.nocodbrc), env vars (NOCODB_URL, NOCODB_TOKEN)
   - `wrapper.py` - Config injection, command aliases (`records list` → `call-tool records_list`), param mapping
-  - `generated.py` - Auto-generated from MCP server (62 tool commands), regenerate with `nocodb/scripts/regenerate-cli.sh`
+  - `generated.py` - Auto-generated from MCP server (60 tool commands), regenerate with `nocodb/scripts/regenerate-cli.sh`
 
 - `nocodb/filters/` - Query filter system
   - `__init__.py` - Filter classes: `EqFilter`, `LikeFilter`, `IsFilter`, `InFilter`, `BetweenFilter`
@@ -203,13 +203,14 @@ nocobot/                          # Monorepo root
   - `raw_filter.py` - `RawFilter` for custom filter strings
 
 - `nocodb/mcpserver/` - MCP Server (FastMCP 3.0)
-  - `server.py` - FastMCP server with 62 tools + 2 prompts exposing all SDK functionality + `/health` endpoint
-  - `dependencies.py` - Environment-based config (NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID, NOCODB_VERIFY_SSL)
-  - `resources.py` - MCP resources: `nocodb_workflow` (schema discovery rules), `nocodb_reference` (full docs)
-  - `tools/` - 17 tool modules for records, bases, tables, fields, views, webhooks, schema export, docs, etc.
+  - `server.py` - FastMCP server with 60 tools + 3 resources + `/health` endpoint
+  - `dependencies.py` - Environment-based config (NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID, NOCODB_VERIFY_SSL, MCP_API_KEY)
+  - `resources/` - MCP resources package: `schema-discovery-rules.md`, `tools-reference.md`, `formula-reference.md` (exposed via ResourcesAsTools transform)
+  - `tools/` - 16 tool modules for records, bases, tables, fields, views, webhooks, schema export, etc.
   - Supports both stdio (local) and HTTP (remote deployment) transports
   - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 3.0)
-  - See `nocodb/docs/DOKPLOY_DEPLOYMENT.md` for Docker/Dokploy deployment
+  - Optional API key auth via `MCP_API_KEY` env var (HTTP only)
+  - See `nocodb/docs/DEPLOY_MCP.md` for Docker/Dokploy deployment
 
 - `nocobot/` - Telegram Bot with NocoDB MCP Agent
   - `main.py` - Entry point, wires Telegram channel, agent loop, MCP client

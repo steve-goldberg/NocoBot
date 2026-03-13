@@ -34,7 +34,7 @@
 
 NocoBot is a Telegram bot that lets you query and manage your self-hosted NocoDB databases using natural language. Ask it to list tables, create records, update fields, or export data — it figures out the right API calls and does it for you.
 
-Under the hood, NocoBot connects an LLM (Claude, GPT, or any OpenRouter model) to NocoDB through the Model Context Protocol (MCP). The bundled Python SDK exposes 62 tools covering the full NocoDB API, which the bot's agent loop calls as needed to fulfill your requests.
+Under the hood, NocoBot connects an LLM (Claude, GPT, or any OpenRouter model) to NocoDB through the Model Context Protocol (MCP). The bundled Python SDK exposes 60 tools covering the full NocoDB API, which the bot's agent loop calls as needed to fulfill your requests.
 
 ---
 
@@ -52,8 +52,8 @@ Under the hood, NocoBot connects an LLM (Claude, GPT, or any OpenRouter model) t
 
 ### NocoDB SDK + MCP Server + CLI
 - **Python SDK** — full v3 Data API + hybrid v2/v3 Meta API (123 tests)
-- **MCP Server** — 62 tools for Claude Desktop and AI integrations (FastMCP 3.0)
-- **CLI** — 62 commands auto-generated from MCP server
+- **MCP Server** — 60 tools for Claude Desktop and AI integrations (FastMCP 3.0)
+- **CLI** — 60 commands auto-generated from MCP server
 - **Self-hosted first** — built for community edition, not enterprise
 
 ---
