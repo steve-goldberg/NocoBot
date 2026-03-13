@@ -23,7 +23,7 @@ class MCPClient:
         """Initialize MCP client.
 
         Args:
-            url: MCP server URL (e.g., http://ncdbmcp.lab/mcp)
+            url: MCP server URL (e.g., http://localhost:8000/mcp)
             tool_timeout: Timeout in seconds for individual tool calls
             api_key: Optional API key for MCP server authentication
         """

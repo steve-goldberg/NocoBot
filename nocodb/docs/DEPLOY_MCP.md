@@ -225,7 +225,7 @@ In `claude_desktop_config.json`:
 }
 ```
 
-**Note:** The `--allow-http` flag is required for non-HTTPS URLs (e.g., internal networks, Tailscale MagicDNS domains like `.lab`).
+**Note:** The `--allow-http` flag is required for non-HTTPS URLs (e.g., internal networks, Tailscale MagicDNS domains).
 
 ### Other MCP Clients
 

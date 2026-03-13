@@ -15,7 +15,7 @@ class Config(BaseSettings):
     openrouter_model: str = "anthropic/claude-sonnet-4"
 
     # NocoDB MCP Server
-    nocodb_mcp_url: str = "http://ncdbmcp.lab/mcp"
+    nocodb_mcp_url: str = "http://localhost:8000/mcp"
     nocodb_mcp_api_key: str = ""
     nocodb_mcp_tool_timeout: int = 30
 

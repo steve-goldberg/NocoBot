@@ -28,7 +28,7 @@ Deploy nocobot (Telegram bot + NocoDB MCP agent) to Dokploy as a standalone serv
 ## Prerequisites
 
 1. **Dokploy instance** running
-2. **NocoDB MCP Server** deployed and accessible (e.g., `http://ncdbmcp.lab/mcp`)
+2. **NocoDB MCP Server** deployed and accessible (e.g., `http://your-mcp-server/mcp`)
 3. **Telegram Bot Token** from [@BotFather](https://t.me/BotFather)
 4. **OpenRouter API Key** from [openrouter.ai](https://openrouter.ai)
 
@@ -74,7 +74,7 @@ Go to **Environment** tab and add these **Runtime Environment Variables**:
 TELEGRAM_TOKEN=your-telegram-bot-token
 OPENROUTER_API_KEY=your-openrouter-api-key
 OPENROUTER_MODEL=anthropic/claude-sonnet-4
-NOCODB_MCP_URL=http://ncdbmcp.lab/mcp
+NOCODB_MCP_URL=http://your-mcp-server/mcp
 ```
 
 **Optional:**
@@ -120,7 +120,7 @@ RUN uv pip install --system --no-cache .
 
 ```
 Configuration loaded
-Connecting to MCP server at http://ncdbmcp.lab/mcp...
+Connecting to MCP server at http://your-mcp-server/mcp...
 Discovered 62 MCP tools
 Cached 2 MCP resources
 Starting Telegram bot (polling mode)...
@@ -157,7 +157,7 @@ Nocobot started - press Ctrl+C to stop
 **Check:**
 1. Is `NOCODB_MCP_URL` correct?
 2. Is MCP server running and accessible from Dokploy network?
-3. Try: `curl http://ncdbmcp.lab/health` from Dokploy server
+3. Try: `curl http://your-mcp-server/health` from Dokploy server
 
 ### "Telegram bot token invalid"
 
@@ -194,7 +194,7 @@ After pushing changes to GitHub:
 | `TELEGRAM_TOKEN` | Yes | - | Bot token from @BotFather |
 | `OPENROUTER_API_KEY` | Yes | - | API key from OpenRouter |
 | `OPENROUTER_MODEL` | No | `anthropic/claude-sonnet-4` | LLM model to use |
-| `NOCODB_MCP_URL` | No | `http://ncdbmcp.lab/mcp` | MCP server URL |
+| `NOCODB_MCP_URL` | No | `http://your-mcp-server/mcp` | MCP server URL |
 | `TELEGRAM_ALLOW_FROM` | No | `[]` | JSON array of allowed user IDs/usernames |
 | `MAX_MESSAGE_LENGTH` | No | `4096` | Max characters per message |
 | `RATE_LIMIT_MESSAGES` | No | `10` | Messages allowed per window (0 to disable) |
