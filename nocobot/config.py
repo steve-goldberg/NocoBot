@@ -16,6 +16,7 @@ class Config(BaseSettings):
 
     # NocoDB MCP Server
     nocodb_mcp_url: str = "http://ncdbmcp.lab/mcp"
+    nocodb_mcp_api_key: str = ""
     nocodb_mcp_tool_timeout: int = 30
 
     # Agent limits

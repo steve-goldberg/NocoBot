@@ -3,10 +3,13 @@
 FastMCP server exposing NocoDB SDK functionality as MCP tools.
 """
 
+import hmac
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastmcp import FastMCP
+from fastmcp.server.auth.providers.debug import DebugTokenVerifier
 from fastmcp.server.transforms import ResourcesAsTools
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -32,10 +35,22 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
     print("NocoDB MCP server shutdown")
 
 
+# Optional API key authentication (set MCP_API_KEY env var to enable)
+_api_key = os.environ.get("MCP_API_KEY")
+_auth = (
+    DebugTokenVerifier(
+        validate=lambda token: hmac.compare_digest(token, _api_key),
+        client_id="nocobot",
+    )
+    if _api_key
+    else None
+)
+
 # Create the FastMCP server
 mcp = FastMCP(
     "NocoDB",
     lifespan=lifespan,
+    auth=_auth,
 )
 
 # Expose resources as tools for clients that only support tools (e.g. mcp-remote)

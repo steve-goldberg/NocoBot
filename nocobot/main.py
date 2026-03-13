@@ -28,7 +28,11 @@ async def main() -> None:
     bus = MessageBus()
 
     # Initialize MCP client and connect
-    mcp = MCPClient(config.nocodb_mcp_url, tool_timeout=config.nocodb_mcp_tool_timeout)
+    mcp = MCPClient(
+        config.nocodb_mcp_url,
+        tool_timeout=config.nocodb_mcp_tool_timeout,
+        api_key=config.nocodb_mcp_api_key or None,
+    )
     await mcp.connect()
 
     # Initialize Telegram channel

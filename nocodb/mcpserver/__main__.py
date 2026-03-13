@@ -12,6 +12,7 @@ Environment variables:
     NOCODB_URL: NocoDB server URL (required)
     NOCODB_TOKEN: API token or JWT (required)
     NOCODB_BASE_ID: Base ID to work with (required)
+    MCP_API_KEY: API key for client authentication (optional, HTTP only)
     MCP_PORT: HTTP port (default: 8000)
     MCP_HOST: HTTP host (default: 0.0.0.0)
 """

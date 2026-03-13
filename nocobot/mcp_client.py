@@ -19,15 +19,17 @@ class MCPClient:
     lazily if the session dies (e.g. server restart).
     """
 
-    def __init__(self, url: str, tool_timeout: int = 30):
+    def __init__(self, url: str, tool_timeout: int = 30, api_key: str | None = None):
         """Initialize MCP client.
 
         Args:
             url: MCP server URL (e.g., http://ncdbmcp.lab/mcp)
             tool_timeout: Timeout in seconds for individual tool calls
+            api_key: Optional API key for MCP server authentication
         """
         self.url = url
         self._tool_timeout = tool_timeout
+        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         self._stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
         self._connected: bool = False
@@ -43,8 +45,8 @@ class MCPClient:
     def _open_transport(self):
         """Create the appropriate transport context manager."""
         if self._is_sse:
-            return sse_client(self.url, timeout=3600)
-        return streamablehttp_client(self.url, timeout=3600)
+            return sse_client(self.url, headers=self._headers, timeout=3600)
+        return streamablehttp_client(self.url, headers=self._headers, timeout=3600)
 
     async def _ensure_session(self) -> ClientSession:
         """Return the persistent session, reconnecting if needed."""
