@@ -15,7 +15,9 @@ COPY providers/ ./nocobot/providers/
 # Install the package
 RUN uv pip install --system --no-cache .
 
-# Create config directory
-RUN mkdir -p /root/.nocobot
+# Run as non-root user
+RUN addgroup --system app && adduser --system --ingroup app app
+RUN mkdir -p /home/app/.nocobot && chown app:app /home/app/.nocobot
+USER app
 
 ENTRYPOINT ["nocobot"]

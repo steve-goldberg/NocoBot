@@ -427,8 +427,12 @@ class TelegramChannel(BaseChannel):
         """Forward slash commands to the bus for unified handling in AgentLoop."""
         if not update.message or not update.effective_user:
             return
+        user = update.effective_user
+        sender_id = str(user.id)
+        if user.username:
+            sender_id = f"{sender_id}|{user.username}"
         await self._handle_message(
-            sender_id=str(update.effective_user.id),
+            sender_id=sender_id,
             chat_id=str(update.message.chat_id),
             content=update.message.text,
             metadata={"message_id": update.message.message_id},
@@ -602,7 +606,10 @@ class TelegramChannel(BaseChannel):
     
     async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log polling / handler errors instead of silently swallowing them."""
-        logger.error(f"Telegram error: {context.error}")
+        err_str = str(context.error)
+        if self.config.token:
+            err_str = err_str.replace(self.config.token, "[REDACTED]")
+        logger.error("Telegram error: {}", err_str)
 
     def _get_extension(self, media_type: str, mime_type: str | None) -> str:
         """Get file extension based on media type."""
