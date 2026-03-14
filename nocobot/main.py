@@ -104,7 +104,6 @@ async def main() -> None:
     await telegram.stop()
     await agent.stop()
     await mcp.close()
-    bus.stop()
 
     for task in tasks:
         task.cancel()
