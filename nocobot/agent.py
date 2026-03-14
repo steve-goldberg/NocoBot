@@ -17,9 +17,6 @@ from nocobot.providers import LiteLLMProvider, ToolCallRequest
 class AgentLoop:
     """Agent that processes messages using LLM and MCP tools."""
 
-    _TOOL_RESULT_MAX = 500             # history storage (save-time)
-    _TOOL_RESULT_INFERENCE_MAX = 4000  # current-turn LLM context (execute-time)
-
     def __init__(
         self,
         bus: MessageBus,
@@ -30,6 +27,12 @@ class AgentLoop:
         max_history: int,
         message_timeout: float,
         max_tokens_budget: int,
+        tool_result_max: int = 500,
+        tool_result_inference_max: int = 4000,
+        max_concurrency: int = 3,
+        session_max_idle: float = 3600.0,
+        llm_max_tokens: int = 4096,
+        llm_temperature: float = 0.7,
     ):
         self.bus = bus
         self.mcp = mcp
@@ -37,8 +40,13 @@ class AgentLoop:
         self.max_history = max_history
         self.message_timeout = message_timeout
         self.max_tokens_budget = max_tokens_budget
+        self._tool_result_max = tool_result_max
+        self._tool_result_inference_max = tool_result_inference_max
+        self._session_max_idle = session_max_idle
+        self._llm_max_tokens = llm_max_tokens
+        self._llm_temperature = llm_temperature
         self._running = False
-        self._semaphore = asyncio.Semaphore(3)
+        self._semaphore = asyncio.Semaphore(max_concurrency)
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
         self._session_tasks: dict[str, asyncio.Task] = {}
@@ -105,12 +113,12 @@ class AgentLoop:
         self._session_last_active.pop(msg.session_key, None)
         await self._send_response(msg, "Stopped. Conversation cleared.")
 
-    def _evict_stale_sessions(self, max_idle: float = 3600.0) -> None:
-        """Remove sessions idle longer than max_idle seconds."""
+    def _evict_stale_sessions(self) -> None:
+        """Remove sessions idle longer than session_max_idle seconds."""
         now = time.monotonic()
         stale = [
             key for key, last in self._session_last_active.items()
-            if now - last > max_idle
+            if now - last > self._session_max_idle
         ]
         for key in stale:
             self._history.pop(key, None)
@@ -202,8 +210,8 @@ class AgentLoop:
             response = await self._llm.chat_with_retry(
                 messages=messages,
                 tools=tools if tools else None,
-                max_tokens=4096,
-                temperature=0.7,
+                max_tokens=self._llm_max_tokens,
+                temperature=self._llm_temperature,
             )
 
             # Bail on LLM error — don't append to history (prevents context poisoning)
@@ -304,10 +312,10 @@ class AgentLoop:
             if (
                 role == "tool"
                 and isinstance(content, str)
-                and len(content) > self._TOOL_RESULT_MAX
+                and len(content) > self._tool_result_max
             ):
                 entry["content"] = (
-                    content[: self._TOOL_RESULT_MAX] + "\n... (truncated)"
+                    content[: self._tool_result_max] + "\n... (truncated)"
                 )
             history.append(entry)
         self._trim_history(history)
@@ -328,8 +336,8 @@ class AgentLoop:
         logger.debug(f"Executing tool: {tc.name}")
         try:
             result = await self.mcp.call_tool(tc.name, tc.arguments)
-            if len(result) > self._TOOL_RESULT_INFERENCE_MAX:
-                result = result[:self._TOOL_RESULT_INFERENCE_MAX] + "\n... (truncated)"
+            if len(result) > self._tool_result_inference_max:
+                result = result[:self._tool_result_inference_max] + "\n... (truncated)"
             return result
         except Exception as e:
             logger.exception("Tool execution failed: %s", tc.name)
