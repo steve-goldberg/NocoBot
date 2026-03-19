@@ -16,7 +16,9 @@ COPY providers/ ./nocobot/providers/
 RUN uv pip install --system --no-cache .
 
 # Run as non-root user
-RUN addgroup --system app && adduser --system --ingroup app app
+# --home is required: without it adduser defaults to /nonexistent,
+# which breaks Python's Path.home() and causes permission errors for media downloads.
+RUN addgroup --system app && adduser --system --home /home/app --ingroup app app
 RUN mkdir -p /home/app/.nocobot && chown app:app /home/app/.nocobot
 USER app
 
