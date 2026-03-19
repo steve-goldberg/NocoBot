@@ -7,26 +7,18 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
 </p>
 
-<p align="center">Chat with your NocoDB databases through Telegram. Powered by an LLM agent with 62 MCP tools.</p>
+<p align="center">Chat with your NocoDB databases through Telegram. Powered by an LLM agent with 60 MCP tools.</p>
 
 ---
 
 ## 📰 News
 
-- **2026-03-12** 🏷️ Renamed repo to NocoBot — bot takes the spotlight
-- **2026-03-12** 🛡️ Security lockdown: default-deny access, API key leak prevention, error sanitization
-- **2026-03-12** ⚡ Persistent MCP sessions with lazy reconnect — no more per-call handshakes
-- **2026-03-12** 💬 Progressive text streaming and markdown table rendering in Telegram
-- **2026-03-12** 🔧 Rate limiting, session management, and media handling (photos/voice/docs)
-- **2026-03-12** 🐛 Hardened nocobot: 12 issues closed, 25+ fixes shipped
-- **2026-02-15** 🔄 FastMCP 3.0.2 upgrade, CLI env var passthrough fix
-- **2026-02-14** 🤖 nocobot — Telegram bot with NocoDB MCP agent integration
-- **2026-02-14** 📦 Monorepo restructure for independent Dokploy deployment
-- **2026-02-13** ⌨️ Auto-generated CLI via FastMCP generate-cli
-- **2026-02-12** 📚 Doc tools for mcp-remote compatibility
-- **2026-02-11** 🚀 FastMCP 3.0 upgrade with Streamable HTTP transport
-- **2026-02-11** 📦 Schema export tools and workflow prompts
-- **2026-02-11** 🐳 Dokploy deployment guide for remote MCP
+- **2026-03** 🖼️ Telegram image support — send photos to the bot for analysis
+- **2026-03** ⚙️ Config refactor — cleaner environment handling across services
+- **2026-03** 🤖 NocoBot launch — Telegram agent with streaming, security lockdown, and session management
+- **2026-02** 🚀 FastMCP 3.0 — Streamable HTTP transport, auto-generated CLI (60 commands)
+- **2026-02** 📦 Monorepo restructure — independent Dokploy deployment for bot + MCP server
+- **2026-02** 📚 Schema export tools, deployment guides, and doc tooling
 
 ---
 
@@ -133,12 +125,13 @@ records = client.records_list_v3(base_id, table_id)
 
 ## Recent Changes
 
+- Telegram image support — send photos, voice, audio, and documents to the bot
+- Pinned nocobot dependencies with uv.lock for reproducible builds
+- Rewrote CLI.md to match actual implementation (60 commands)
 - Persist tool calls and results to conversation history for better multi-turn conversations
 - Media file size limit (20MB) and disk cap (500MB) for safe media handling
 - Hardened error messages — no more leaking NocoDB internals to users
 - Persistent MCP session with lazy reconnect (no more per-call TCP handshakes)
-- TTL eviction for stale sessions and rate limiter buckets
-- Progressive text streaming and markdown table rendering
 - Default-deny access control and API key leak prevention
 
 ---
