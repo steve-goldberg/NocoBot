@@ -44,6 +44,8 @@ async def main() -> None:
         rate_limit_window=config.rate_limit_window,
         media_max_file_size=config.media_max_file_size,
         media_max_total_size=config.media_max_total_size,
+        max_chunk_length=config.telegram_max_chunk_length,
+        connection_pool_size=config.telegram_connection_pool_size,
     )
     telegram = TelegramChannel(telegram_config, bus)
 
@@ -57,6 +59,15 @@ async def main() -> None:
         max_history=config.agent_max_history,
         message_timeout=config.agent_message_timeout,
         max_tokens_budget=config.agent_max_tokens,
+        tool_result_max=config.agent_tool_result_max,
+        tool_result_inference_max=config.agent_tool_result_inference_max,
+        max_concurrency=config.agent_max_concurrency,
+        session_max_idle=config.agent_session_max_idle,
+        llm_max_tokens=config.llm_max_tokens,
+        llm_temperature=config.llm_temperature,
+        vision_max_images=config.vision_max_images,
+        vision_max_long_edge=config.vision_max_long_edge,
+        vision_detail=config.vision_detail,
     )
 
     # Set up graceful shutdown

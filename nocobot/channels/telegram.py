@@ -28,9 +28,8 @@ class TelegramConfig:
     rate_limit_window: float = 60.0
     media_max_file_size: int = 20_971_520      # 20 MB
     media_max_total_size: int = 524_288_000     # 500 MB
-
-
-TELEGRAM_MAX_MESSAGE_LEN = 4000
+    max_chunk_length: int = 4000
+    connection_pool_size: int = 16
 
 
 def _enforce_dir_cap(media_dir: "Path", max_total: int) -> None:
@@ -46,7 +45,7 @@ def _enforce_dir_cap(media_dir: "Path", max_total: int) -> None:
         logger.debug(f"Deleted oldest media file: {oldest.name}")
 
 
-def _split_message(text: str, max_len: int = TELEGRAM_MAX_MESSAGE_LEN) -> list[str]:
+def _split_message(text: str, max_len: int = 4000) -> list[str]:
     """Split text into chunks, preferring line breaks, then spaces, then hard cut."""
     if len(text) <= max_len:
         return [text]
@@ -231,7 +230,7 @@ class TelegramChannel(BaseChannel):
         self._running = True
         
         # Build the application with larger connection pool to avoid pool-timeout on long runs
-        req = HTTPXRequest(connection_pool_size=16, pool_timeout=5.0, connect_timeout=30.0, read_timeout=30.0)
+        req = HTTPXRequest(connection_pool_size=self.config.connection_pool_size, pool_timeout=5.0, connect_timeout=30.0, read_timeout=30.0)
         builder = Application.builder().token(self.config.token).request(req).get_updates_request(req)
         if self.config.proxy:
             builder = builder.proxy(self.config.proxy).get_updates_proxy(self.config.proxy)
@@ -326,7 +325,7 @@ class TelegramChannel(BaseChannel):
             await self._send_text(chat_id, msg.content, reply_params=reply_params)
         else:
             self._stop_typing(msg.chat_id)
-            chunks = _split_message(msg.content)
+            chunks = _split_message(msg.content, max_len=self.config.max_chunk_length)
             for i, chunk in enumerate(chunks):
                 rp = reply_params if i == 0 else None
                 await self._send_with_streaming(chat_id, chunk, reply_params=rp)
