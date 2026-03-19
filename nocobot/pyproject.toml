@@ -24,6 +24,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "loguru>=0.7.0",
     "httpx>=0.25.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

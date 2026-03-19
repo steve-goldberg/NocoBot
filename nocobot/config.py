@@ -35,6 +35,11 @@ class Config(BaseSettings):
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.7
 
+    # Vision
+    vision_max_images: int = 5
+    vision_max_long_edge: int = 1024
+    vision_detail: str = "low"          # "low", "high", or "auto"
+
     # Input validation
     max_message_length: int = 4096
 

@@ -65,6 +65,9 @@ async def main() -> None:
         session_max_idle=config.agent_session_max_idle,
         llm_max_tokens=config.llm_max_tokens,
         llm_temperature=config.llm_temperature,
+        vision_max_images=config.vision_max_images,
+        vision_max_long_edge=config.vision_max_long_edge,
+        vision_detail=config.vision_detail,
     )
 
     # Set up graceful shutdown

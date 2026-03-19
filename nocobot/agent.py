@@ -12,6 +12,7 @@ from nocobot.bus.events import InboundMessage, OutboundMessage
 from nocobot.bus.queue import MessageBus
 from nocobot.mcp_client import MCPClient
 from nocobot.providers import LiteLLMProvider, ToolCallRequest
+from nocobot.vision import build_vision_content
 
 
 class AgentLoop:
@@ -33,6 +34,9 @@ class AgentLoop:
         session_max_idle: float = 3600.0,
         llm_max_tokens: int = 4096,
         llm_temperature: float = 0.7,
+        vision_max_images: int = 5,
+        vision_max_long_edge: int = 1024,
+        vision_detail: str = "low",
     ):
         self.bus = bus
         self.mcp = mcp
@@ -45,6 +49,9 @@ class AgentLoop:
         self._session_max_idle = session_max_idle
         self._llm_max_tokens = llm_max_tokens
         self._llm_temperature = llm_temperature
+        self._vision_max_images = vision_max_images
+        self._vision_max_long_edge = vision_max_long_edge
+        self._vision_detail = vision_detail
         self._running = False
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._session_locks: dict[str, asyncio.Lock] = {}
@@ -197,7 +204,17 @@ class AgentLoop:
             + list(history)
         )
         skip = len(messages)  # new messages (including user msg) start here
-        messages.append({"role": "user", "content": msg.content})
+        if msg.media:
+            content = build_vision_content(
+                msg.content,
+                msg.media,
+                max_images=self._vision_max_images,
+                max_long_edge=self._vision_max_long_edge,
+                detail=self._vision_detail,
+            )
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": msg.content})
 
         # Get MCP tools
         tools = self.mcp.get_tools_for_llm()
@@ -306,6 +323,15 @@ class AgentLoop:
         """Persist new messages from the agent loop into session history."""
         for m in messages[skip:]:
             entry = dict(m)
+            # Strip image blocks from history to avoid persisting base64 blobs
+            content = entry.get("content")
+            if isinstance(content, list):
+                text_parts = [p["text"] for p in content if p.get("type") == "text"]
+                image_count = sum(1 for p in content if p.get("type") == "image_url")
+                summary = "\n".join(text_parts)
+                if image_count:
+                    summary += f"\n[{image_count} image(s) were attached]"
+                entry["content"] = summary
             role, content = entry.get("role"), entry.get("content")
             if role == "assistant" and not content and not entry.get("tool_calls"):
                 continue
