@@ -1,5 +1,7 @@
 """Configuration for nocobot - NocoDB Telegram Agent."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -38,7 +40,7 @@ class Config(BaseSettings):
     # Vision
     vision_max_images: int = 5
     vision_max_long_edge: int = 1024
-    vision_detail: str = "low"          # "low", "high", or "auto"
+    vision_detail: Literal["low", "high", "auto"] = "low"
 
     # Input validation
     max_message_length: int = 4096
