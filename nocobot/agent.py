@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any
 
@@ -205,13 +206,17 @@ class AgentLoop:
         )
         skip = len(messages)  # new messages (including user msg) start here
         if msg.media:
+            # Strip "[image: /path]" placeholders — the actual image goes as a vision block
+            clean_text = re.sub(r"\[image: [^\]]+\]\n?", "", msg.content).strip()
             content = build_vision_content(
-                msg.content,
+                clean_text,
                 msg.media,
                 max_images=self._vision_max_images,
                 max_long_edge=self._vision_max_long_edge,
                 detail=self._vision_detail,
             )
+            n_images = sum(1 for p in content if p.get("type") == "image_url")
+            logger.debug(f"Built vision content: {n_images} image(s), text={clean_text[:80]!r}")
             messages.append({"role": "user", "content": content})
         else:
             messages.append({"role": "user", "content": msg.content})
