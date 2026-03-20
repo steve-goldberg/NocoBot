@@ -32,7 +32,7 @@ class AgentLoop:
         tool_result_max: int = 500,
         tool_result_inference_max: int = 4000,
         max_concurrency: int = 3,
-        session_max_idle: float = 3600.0,
+        session_max_idle: float = 7200.0,
         llm_max_tokens: int = 4096,
         llm_temperature: float = 0.7,
         vision_max_images: int = 5,
@@ -59,6 +59,7 @@ class AgentLoop:
         self._tasks: set[asyncio.Task] = set()
         self._session_tasks: dict[str, asyncio.Task] = {}
         self._session_last_active: dict[str, float] = {}
+        self._evicted_sessions: set[str] = set()
         self._last_eviction: float = 0.0
 
         # In-memory conversation history per chat_id
@@ -119,6 +120,7 @@ class AgentLoop:
         self._history.pop(msg.session_key, None)
         self._session_locks.pop(msg.session_key, None)
         self._session_last_active.pop(msg.session_key, None)
+        self._evicted_sessions.discard(msg.session_key)
         await self._send_response(msg, "Stopped. Conversation cleared.")
 
     def _evict_stale_sessions(self) -> None:
@@ -133,6 +135,7 @@ class AgentLoop:
             self._session_locks.pop(key, None)
             self._session_tasks.pop(key, None)
             self._session_last_active.pop(key, None)
+            self._evicted_sessions.add(key)
         if stale:
             logger.info(f"Evicted {len(stale)} stale sessions")
 
@@ -220,6 +223,19 @@ class AgentLoop:
             messages.append({"role": "user", "content": content})
         else:
             messages.append({"role": "user", "content": msg.content})
+
+        # Inject eviction context for the LLM (ephemeral, not saved to history)
+        if msg.session_key in self._evicted_sessions:
+            self._evicted_sessions.discard(msg.session_key)
+            messages.insert(1, {
+                "role": "system",
+                "content": (
+                    "This user had a previous conversation that has since expired "
+                    "due to inactivity. You have no memory of it. If they reference "
+                    "something from before, let them know the prior session expired "
+                    "and ask them to re-state what they need."
+                ),
+            })
 
         # Get MCP tools
         tools = self.mcp.get_tools_for_llm()

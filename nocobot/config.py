@@ -31,7 +31,7 @@ class Config(BaseSettings):
     agent_tool_result_max: int = 500
     agent_tool_result_inference_max: int = 4000
     agent_max_concurrency: int = 3
-    agent_session_max_idle: float = 3600.0
+    agent_session_max_idle: float = 7200.0
 
     # LLM defaults
     llm_max_tokens: int = 4096
