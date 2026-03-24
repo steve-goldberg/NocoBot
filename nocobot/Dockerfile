@@ -2,8 +2,9 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
-# Copy project metadata first
-COPY pyproject.toml LICENSE ./
+# Copy project metadata and lock file, export pinned versions
+COPY pyproject.toml LICENSE uv.lock ./
+RUN uv export --locked --no-dev --no-hashes > /tmp/requirements.txt
 
 # Copy all source files into nocobot/ subdirectory to match package structure
 # (Docker context is nocobot/, so we recreate the package hierarchy)
@@ -11,10 +12,10 @@ COPY __init__.py __main__.py main.py agent.py mcp_client.py config.py ratelimit.
 COPY bus/ ./nocobot/bus/
 COPY channels/ ./nocobot/channels/
 COPY providers/ ./nocobot/providers/
-COPY uv.lock ./
 
-# Install the package (locked to prevent pulling compromised versions)
-RUN uv pip install --system --no-cache . --locked
+# Install locked dependencies, then the package itself
+RUN uv pip install --system --no-cache -r /tmp/requirements.txt && \
+    uv pip install --system --no-cache --no-deps .
 
 # Run as non-root user
 # --home is required: without it adduser defaults to /nonexistent,
