@@ -18,7 +18,7 @@ classifiers = [
 
 dependencies = [
     "python-telegram-bot[socks]>=21.0",
-    "litellm>=1.0.0",
+    "litellm>=1.0.0,<1.82.7",
     "mcp>=1.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",

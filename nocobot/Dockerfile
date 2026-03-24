@@ -11,9 +11,10 @@ COPY __init__.py __main__.py main.py agent.py mcp_client.py config.py ratelimit.
 COPY bus/ ./nocobot/bus/
 COPY channels/ ./nocobot/channels/
 COPY providers/ ./nocobot/providers/
+COPY uv.lock ./
 
-# Install the package
-RUN uv pip install --system --no-cache .
+# Install the package (locked to prevent pulling compromised versions)
+RUN uv pip install --system --no-cache . --locked
 
 # Run as non-root user
 # --home is required: without it adduser defaults to /nonexistent,
