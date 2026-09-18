@@ -45,6 +45,31 @@ first, Phase 3 cannot distinguish an upgrade regression from damage that was alr
 
 ### 1. Regenerate the CLI on 3.x
 
+> ### ⚠️ READ THIS BEFORE RUNNING ANYTHING — report §6.4
+>
+> **`regenerate-cli.sh` sources the repo `.env` and boots the real server against the user's live
+> NocoDB instance.** Running it is a production-touching action.
+>
+> The regeneration itself is read-only — `fastmcp generate-cli` introspects `list_tools` and writes
+> no data. That is fine. **The hazard is the credentials being live at all.**
+>
+> During Phase 1 a verification command using `env -u NOCODB_URL -u NOCODB_TOKEN` **failed to
+> suppress credentials**, because `tests/test_integration_full.py:22` calls `load_dotenv()` and
+> repopulated them from disk. The 57 destructive integration tests then ran against the user's real
+> instance. Cleanup was clean, but the lesson is binding:
+>
+> **`env -u VAR` does not make anything safe.** Unsetting a variable cannot protect you from a
+> module that reads credentials off disk itself.
+>
+> Rules for you:
+> - **Never run `pytest` with `NOCODB_RUN_INTEGRATION=1`.** Not to check something, not briefly.
+>   Those 57 tests create and delete a real base.
+> - Plain `venv/bin/python -m pytest -q` is safe — verified: 164 passed / 57 skipped, integration
+>   skipped not executed. Use that and nothing else.
+> - If you need a server without live credentials, use dummy values explicitly
+>   (`NOCODB_URL=https://example.invalid NOCODB_TOKEN=x NOCODB_BASE_ID=b`) rather than trying to
+>   unset the real ones. That is how the architect's verification command below works.
+
 Run `nocodb/scripts/regenerate-cli.sh`. Pipeline (report §4.4): sources `.env`, picks a free port
 from 9876, launches `python3 -m nocodb.mcpserver --http --port $PORT`, runs
 `fastmcp generate-cli http://localhost:$PORT/mcp ... -f --timeout 60`, kills the server, then

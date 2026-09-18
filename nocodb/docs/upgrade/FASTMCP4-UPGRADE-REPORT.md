@@ -516,6 +516,74 @@ nocodb finder in §2.1.
 deliberately. This is a local-dev-only defect. It touches packaging, so it is explicitly **not**
 folded into Phase 3 — flagged for a separate decision.
 
+### 6.4 Phase 1 complete (`d047b6d`) — and a live-credential hazard every later phase must respect
+
+12 tests in `nocodb/mcpserver/mcpserver_test.py`, plus `pytest.ini` and `conftest.py`. Suite:
+**164 passed / 57 skipped**. Architect-verified: suite re-run independently, `server.py` confirmed
+byte-identical to `pre-fastmcp4`, and the **T5 mutation independently reproduced** — removing
+`validate=` from `server.py:41-44` fails exactly one test, T5, while `/health` stays green and the
+correct-token test still passes. The net can fail on the real defect.
+
+#### ⚠️ INCIDENT — the live integration suite was run against the real NocoDB instance
+
+During Phase 1, a verification command using `env -u NOCODB_URL -u NOCODB_TOKEN` **did not suppress
+the credentials**, because `tests/test_integration_full.py:22` calls `load_dotenv()` on the repo
+`.env` and repopulated them. The 57 destructive integration tests — which create and delete a real
+base — executed against the user's live instance.
+
+Reported outcome: teardown cleaned up, no `SDK_Integration_Test_Base` remains, and the only failures
+were the v2 view/webhook creates that `CLAUDE.md` already documents as broken in self-hosted.
+
+**The rule this establishes, binding on Phases 2–4:**
+
+> `tests/test_integration_full.py` self-loads the repo `.env`. **`env -u VAR` does not make it
+> safe.** Unsetting an environment variable cannot protect you from a module that reads the
+> credentials off disk itself. The only safe gate is the explicit opt-in flag.
+
+Phase 1's mitigation: the suite now requires `NOCODB_RUN_INTEGRATION=1`, and requesting it without
+credentials raises `RuntimeError` at import rather than skipping silently. Architect-verified: with
+the flag unset, all 57 skip rather than execute.
+
+This also retroactively justifies the fix. Correcting the `NOCODB_API_KEY` → `NOCODB_TOKEN` name
+alone — the obvious reading of the original Phase 1 brief — **would have switched 57 destructive
+tests ON by default for anyone running plain `pytest` at the repo root**, because the module
+supplies its own credentials. The opt-in flag is load-bearing, not ceremony.
+
+**Any phase that runs a command touching `.env` is touching production.** That includes
+`regenerate-cli.sh`, which sources `.env` and boots the real server (Phase 2).
+
+#### Test-harness portability — Phase 3 must not misread this
+
+The new tests import **`httpx`** directly for `ASGITransport` (auth cannot be tested through the
+in-memory client, which bypasses HTTP middleware; T4–T6 go through `mcp.http_app()`).
+
+**This narrows §3.1 B5.** B5 marked the httpx→httpx2 move N/A on the grounds that `except httpx.`
+had zero hits. That was true of application code and is still true — but the *test harness* now
+depends on plain `httpx` being importable. If 4.x drops it from the dependency tree, **T4–T6 fail at
+import. That is a harness break, not a migration defect, and must not be reported as one.**
+
+Port target: FastMCP 4 ships `fastmcp.utilities.tests` (`asgi_server`, `asgi_client`, `http_client`),
+which does not exist in 3.4.7 — verified by Phase 1, which is why it was not used.
+
+Two further notes from Phase 1 for Phase 3:
+
+- **T1 and T3 are deliberately strict.** T3 pins the zero-argument tool set to exactly
+  `{bases_list, base_info, tables_list, members_list, schema_export_base, list_resources}` — those
+  six are genuinely zero-arg (they operate on the configured base), so a blanket "properties must be
+  non-empty" would have been wrong. If 4.x changes how `ResourcesAsTools` names or schemas its two
+  tools, T1/T3 fail **by design**. Read such a failure as "the transform changed", not "the server
+  broke".
+- **The integration-test fix is NOT committed.** `tests/` is gitignored (`.gitignore:15`), so the
+  `NOCODB_RUN_INTEGRATION` guard lives only in the local working copy and will not survive a fresh
+  clone. Phase 1's recommendation: keep `tests/` ignored (the files may carry real NocoDB details,
+  and history would retain them), and decide separately between (a) leaving it as a documented
+  local-only harness, or (b) moving credential-free parts into tracked colocated `*_test.py` files
+  and keeping only live E2E under `tests/`. **Unresolved — user's call.**
+
+Also added in Phase 1: a `test` extra in `setup.py` (pytest, pytest-asyncio, python-dotenv, fastmcp,
+httpx), deliberately **not** folded into `all`, so test dependencies never reach the Docker image
+(which installs `.[mcp]`).
+
 ---
 
 ## 7. Rules for every phase agent

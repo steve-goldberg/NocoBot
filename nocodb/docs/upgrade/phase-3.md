@@ -145,6 +145,33 @@ Before trusting the corpus, check the 4.0.4 → 4.0.5 delta upstream (GitHub rel
 change something relevant, **report it to the architect before proceeding**; the report is wrong and
 Phases 1–2 may have been built on a stale assumption.
 
+### 6b. If T4–T6 break on `import httpx`, that is the harness, not the migration
+
+**Report §6.4.** Phase 1's auth tests import plain **`httpx`** for `ASGITransport` — auth cannot be
+tested through the in-memory client, which bypasses HTTP middleware, so T4–T6 go through
+`mcp.http_app()`.
+
+This narrows §3.1 B5. B5 marked httpx→httpx2 N/A because `except httpx.` had zero hits — still true
+of application code, but the **test harness** now needs plain `httpx` importable. If 4.x drops it
+from the tree, T4–T6 fail at import.
+
+**Do not report that as a migration defect.** Port the harness to `fastmcp.utilities.tests`
+(`asgi_server`, `asgi_client`, `http_client`), which ships in FastMCP 4 and does not exist in 3.4.7
+— that is why Phase 1 used raw httpx. Keep every assertion identical, especially T5.
+
+Likewise, T1 and T3 are **deliberately strict**. T3 pins the zero-arg tool set to exactly
+`{bases_list, base_info, tables_list, members_list, schema_export_base, list_resources}`. If 4.x
+changes how `ResourcesAsTools` names or schemas its two tools, T1/T3 fail **by design** — read that
+as "the transform changed", not "the server broke", and update the pinned set deliberately rather
+than loosening the assertion.
+
+### 6c. Live-credential rule
+
+**Report §6.4.** Never run `pytest` with `NOCODB_RUN_INTEGRATION=1` — those 57 tests create and
+delete a real base on the user's instance. Plain `venv/bin/python -m pytest -q` is safe. Do not try
+to sanitise the environment with `env -u VAR`; `tests/test_integration_full.py:22` calls
+`load_dotenv()` and will repopulate credentials from disk. Use explicit dummy values instead.
+
 ### 7. Residual checks
 
 - `grep -rn '\.ping(' nocodb/ nocobot/` — `client.ping()` **raises on the modern protocol era**
