@@ -1,6 +1,6 @@
 # MCP Server
 
-FastMCP 3.x server for AI assistants like Claude Desktop.
+FastMCP 4.x server for AI assistants like Claude Desktop.
 
 `list_tools()` returns **62 tools**: the 60 `@mcp.tool` functions in `mcpserver/tools/`, plus the 2
 that the `ResourcesAsTools` transform adds (`list_resources`, `read_resource`). That transform emits

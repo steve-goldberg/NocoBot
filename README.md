@@ -44,7 +44,7 @@ Under the hood, NocoBot connects an LLM (Claude, GPT, or any OpenRouter model) t
 
 ### NocoDB SDK + MCP Server + CLI
 - **Python SDK** — full v3 Data API + hybrid v2/v3 Meta API (123 tests)
-- **MCP Server** — 62 tools for Claude Desktop and AI integrations (FastMCP 3.x)
+- **MCP Server** — 62 tools for Claude Desktop and AI integrations (FastMCP 4.x)
 - **CLI** — 62 commands auto-generated from MCP server
 - **Self-hosted first** — built for community edition, not enterprise
 

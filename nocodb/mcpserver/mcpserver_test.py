@@ -190,6 +190,36 @@ def _post_initialize(client: httpx.AsyncClient, token: str | None):
 
 
 # ---------------------------------------------------------------------------
+# T0 -- the camelCase bridge is off
+# ---------------------------------------------------------------------------
+
+
+def test_t0_camelcase_compat_bridge_is_disabled():
+    """The compat bridge must be off, and this must be checked, not assumed.
+
+    FastMCP 4 bridges legacy camelCase reads on SDK v2 models -- ``tool.inputSchema``
+    resolves to ``input_schema`` and warns instead of raising. ``conftest.py``
+    disables that for the session so any read this migration missed fails
+    loudly.
+
+    Asserting it here closes the fail-open path. If the environment variable
+    were renamed upstream or misspelled in conftest, the bridge would stay on,
+    every surviving camelCase read would keep passing, and the suite would
+    certify a migration it had not actually tested. The bridge being off is
+    what gives the rest of this module its meaning, so it gets a test rather
+    than a comment.
+    """
+    from fastmcp import settings
+
+    assert settings.mcp_camelcase_compat is False, (
+        "FastMCP's camelCase compat bridge is ON during tests. Residual "
+        "camelCase protocol reads will warn instead of failing, so a passing "
+        "suite proves nothing about the SDK v2 rename. Check that conftest.py "
+        "sets FASTMCP_MCP_CAMELCASE_COMPAT before anything imports fastmcp."
+    )
+
+
+# ---------------------------------------------------------------------------
 # T1 -- tool registration
 # ---------------------------------------------------------------------------
 
@@ -305,7 +335,7 @@ async def test_t3_every_tool_has_a_well_formed_input_schema():
         tools = await client.list_tools()
 
     for tool in tools:
-        schema = tool.inputSchema
+        schema = tool.input_schema
         assert schema, f"{tool.name} has an empty input schema"
         assert isinstance(schema, dict), f"{tool.name} schema is not a dict"
         assert schema.get("type") == "object", (
@@ -323,7 +353,7 @@ async def test_t3_only_known_zero_argument_tools_take_no_parameters():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    zero_arg = {tool.name for tool in tools if not tool.inputSchema.get("properties")}
+    zero_arg = {tool.name for tool in tools if not tool.input_schema.get("properties")}
     assert zero_arg == EXPECTED_ZERO_ARG_TOOLS
 
 

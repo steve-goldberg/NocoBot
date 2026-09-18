@@ -112,14 +112,26 @@ The server has a `/health` endpoint. Go to **Advanced** tab:
 ### Expected Build Output
 
 ```
-Step 1/8 : FROM python:3.12-slim
-Step 2/8 : WORKDIR /app
-Step 3/8 : RUN pip install uv
-Step 4/8 : COPY . .
-Step 5/8 : RUN uv pip install --system -e ".[mcp]"
-Step 6/8 : ENV MCP_PORT=8000
-Step 7/8 : ENV MCP_HOST=0.0.0.0
-Step 8/8 : CMD ["python", "-m", "nocodb.mcpserver", "--http"]
+Step 1/9 : FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+Step 2/9 : WORKDIR /app
+Step 3/9 : COPY requirements-mcp.txt ./
+Step 4/9 : RUN uv pip install --system --no-cache -r requirements-mcp.txt
+Step 5/9 : COPY . .
+Step 6/9 : RUN uv pip install --system --no-cache --no-deps .
+Step 7/9 : RUN uv pip install --system --no-cache setuptools && uv pip install --system --offline --no-build-isolation --dry-run ".[mcp]" > /dev/null && uv pip uninstall --system setuptools
+Step 8/9 : ENV MCP_PORT=8000 / MCP_HOST=0.0.0.0
+Step 9/9 : CMD ["python", "-m", "nocodb.mcpserver", "--http"]
+```
+
+Dependencies come from `requirements-mcp.txt`, which is fully pinned, so a
+build installs the same versions every time instead of resolving against live
+PyPI. Step 7 re-resolves the declared dependencies offline and fails the build
+if `setup.py` and `requirements-mcp.txt` have drifted apart. If it fails,
+regenerate the lockfile rather than editing it by hand:
+
+```bash
+uv pip compile setup.py --extra mcp \
+    --python-version 3.12 --python-platform linux -o requirements-mcp.txt
 ```
 
 ### Expected Runtime Output

@@ -111,7 +111,7 @@ nocobot/                          # Monorepo root
 │   │   ├── wrapper.py            # Config injection, command aliases
 │   │   ├── generated.py          # Auto-generated CLI (62 commands)
 │   │   └── skill.md              # Agent skill documentation
-│   ├── mcpserver/                # MCP Server (FastMCP 3.0)
+│   ├── mcpserver/                # MCP Server (FastMCP 4.x)
 │   │   ├── __init__.py           # Package exports
 │   │   ├── __main__.py           # Entry point for `python -m nocodb.mcpserver`
 │   │   ├── server.py             # FastMCP server with lifespan
@@ -206,7 +206,7 @@ nocobot/                          # Monorepo root
   - `factory.py` - `basic_filter_class_factory()` for creating custom filters
   - `raw_filter.py` - `RawFilter` for custom filter strings
 
-- `nocodb/mcpserver/` - MCP Server (FastMCP 3.0)
+- `nocodb/mcpserver/` - MCP Server (FastMCP 4.x)
   - `server.py` - FastMCP server with 60 `@mcp.tool` functions + 3 resources + `/health` endpoint.
     `ResourcesAsTools` adds exactly **2** more tools (`list_resources`, `read_resource`) regardless
     of resource count, so `list_tools()` returns **62**. The 3 resources are reached *through*
@@ -215,7 +215,7 @@ nocobot/                          # Monorepo root
   - `resources/` - MCP resources package: `schema-discovery-rules.md`, `tools-reference.md`, `formula-reference.md` (exposed via ResourcesAsTools transform)
   - `tools/` - 16 tool modules for records, bases, tables, fields, views, webhooks, schema export, etc.
   - Supports both stdio (local) and HTTP (remote deployment) transports
-  - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 3.0)
+  - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 4.x)
   - Optional API key auth via `MCP_API_KEY` env var (HTTP only)
   - See `nocodb/docs/DEPLOY_MCP.md` for Docker/Dokploy deployment
 

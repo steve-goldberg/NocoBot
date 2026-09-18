@@ -5,7 +5,7 @@
 #   ./scripts/regenerate-cli.sh
 #
 # Requirements:
-#   - fastmcp >= 3.4.7,<4
+#   - fastmcp >= 4.0.5,<5
 #   - NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID (via .env, env vars, or .nocodbrc)
 #
 # Fail-fast contract: every post-processing substitution asserts that it

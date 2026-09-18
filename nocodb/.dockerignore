@@ -1,0 +1,32 @@
+# The Dockerfile does `COPY . .` with the build context set to nocodb/, so
+# without this file every one of these ends up in the image -- and, worse,
+# invalidates the COPY layer on each change. docs/ alone carries ~2.9 MB of
+# vendored upstream FastMCP documentation, so editing a markdown file was
+# enough to bust the cache and reinstall the whole dependency tree.
+#
+# requirements-mcp.txt is deliberately NOT ignored: the build installs from it.
+
+# Vendored docs, agent skills and upgrade notes -- not needed at runtime
+docs/
+skills/
+scripts/
+
+# Build and test artifacts
+*.egg-info/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# Tests are not installed into the image (setup.py's `test` extra is
+# deliberately excluded from `all`, which is what the image installs)
+*_test.py
+
+# Local environment
+.env
+.venv/
+venv/
+.nocodbrc
