@@ -22,6 +22,37 @@ that is true in both (report §3.3 lists what survives).
 
 ## Scope
 
+### 0. Normalise the environment FIRST — before writing a single test
+
+**Added after Phase 0. Read report §6.1.** Do this before anything else in this phase.
+
+Phase 0 capped the pin and proved `fastmcp>=3.0.2,<4` resolves to **3.4.7** (uncapped: 4.0.5). But
+the local venv still has **`fastmcp==3.0.0`** — below the declared `>=3.0.2` floor, and four minors
+behind what a prod rebuild now installs.
+
+If you write the test net against 3.0.0, you are testing a version nobody runs. That is the exact
+defect this report criticises in §2.1 — the environment you test in and the environment that ships
+sharing no resolution. It would also hand Phase 3 a net of unknown fidelity.
+
+So:
+
+1. Upgrade the venv to **3.4.7** (`venv/bin/python -m pip install --upgrade 'fastmcp>=3.4.7,<4'` or
+   equivalent). Confirm the installed version afterwards.
+2. Repair the dead editable install (report §2.1): `__editable___nocodb_3_0_0_finder.py` points at
+   `/Users/stevegoldberg/Code/Utils/nocodb/nocodb`, **a path that no longer exists** (repo moved to
+   `Code/_utils/`). Imports currently resolve only because pytest puts rootdir on `sys.path` — that
+   is luck, not correctness, and it will bite the moment a test runs from another cwd.
+3. Raise the declared floor in `nocodb/setup.py` at all three sites (now lines 48/53/57 after Phase
+   0's comments) from `fastmcp>=3.0.2,<4` to **`fastmcp>=3.4.7,<4`**, so the declared floor equals
+   the version you test against. Keep Phase 0's `<4` cap and its comments intact.
+4. **Re-run the existing suite before writing anything new.** Baseline from Phase 0 is
+   `152 passed, 57 skipped, 3 warnings` (209 collected; the 3 warnings are pre-existing
+   un-awaited-coroutine RuntimeWarnings in `nocobot/agent_test.py`). If the 3.0.0 → 3.4.7 bump
+   changes that, **stop and report it** — that is a real finding about the minor jump, and I need
+   it before Phase 3.
+
+Only once the environment is normalised and the baseline reproduces should you start on tests.
+
 ### 1. Add `conftest.py` and fix pytest config
 
 No `conftest.py` exists anywhere; pytest detects no configfile from the repo root, so

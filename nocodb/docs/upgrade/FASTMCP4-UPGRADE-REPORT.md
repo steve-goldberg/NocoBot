@@ -49,6 +49,12 @@ Key line ranges already located in `fastmcp-full.txt`:
 The corpus is the FastMCP **4** docs site and contains a `/v3/` mirror of the v3 docs, so both
 versions are greppable from the same file.
 
+> **STALENESS WARNING (added post-Phase-0).** The corpus was fetched 2026-09-17 and its changelog
+> stops at **4.0.4**. PyPI now serves **4.0.5**. Phase 3 will therefore install a release one patch
+> ahead of the vendored docs. Probably immaterial for a patch bump — but **Phase 3 must check the
+> 4.0.4 → 4.0.5 delta upstream rather than assuming the on-disk corpus is complete.** Do not treat
+> this file as the last word on the installed version.
+
 ---
 
 ## 2. Baseline state (verified 2026-09-17)
@@ -409,6 +415,29 @@ stdio relies on the **default** transport (no `transport=` passed). Host default
 **Ordering is not negotiable.** Phase 0 before 1 because prod is currently exposed. Phase 2 before 3
 because stale `generated.py` poisons the upgrade signal. Phase 1 before 3 because there is otherwise
 nothing to detect a regression with.
+
+### 6.1 Scope amendment after Phase 0 (2026-09-17)
+
+Phase 0 (commit `40dd089`) proved the cap binds: `fastmcp>=3.0.2,<4` resolves to **3.4.7**, uncapped
+resolves to **4.0.5**. Independently re-verified by the architect.
+
+That surfaced a gap the original plan missed. **The local venv has `fastmcp==3.0.0`, but a prod
+rebuild under the cap now installs `3.4.7`** — a four-minor jump. Building the Phase 1 test net on
+3.0.0 would mean testing against a version nobody runs, which reproduces the exact defect this
+report criticises in §2.1: *the environment you test in and the environment that ships share no
+dependency resolution*.
+
+**Decision: environment normalisation moves from Phase 2 into Phase 1, as its step 0.**
+
+- Phase 1 upgrades the venv to the version the cap resolves to (3.4.7) **before** writing any test,
+  and repairs the dead editable-install finder (§2.1).
+- Phase 1 then raises the declared floor to `fastmcp>=3.4.7,<4` so the declared floor equals the
+  tested version. This removes the 4-minor unknown entirely rather than carrying it into Phase 3.
+- Phase 2 no longer owns the venv/editable repair. Its §4 item is struck.
+
+Rationale: a test net is only worth what its environment fidelity is worth. Normalising first costs
+minutes; discovering in Phase 3 that the tests were written against 3.0.0 behaviour costs the whole
+upgrade's attribution.
 
 ---
 

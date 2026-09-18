@@ -113,7 +113,19 @@ Report §3.4: set `mcp_camelcase_compat` / `FASTMCP_MCP_CAMELCASE_COMPAT=False` 
 any surviving camelCase read raises `AttributeError` instead of warning. This is how you prove the
 migration is complete rather than merely quiet.
 
-### 6. Residual checks
+### 6. Check the changelog delta the vendored docs do not cover
+
+**Added after Phase 0 — report §1 staleness warning.** `nocodb/docs/fastmcp-full.txt` was fetched
+2026-09-17 and its changelog stops at **4.0.4**. PyPI serves **4.0.5** (confirmed by resolver:
+uncapped `fastmcp>=3.0.2` → `4.0.5`). You will install a release the on-disk docs do not describe.
+
+Before trusting the corpus, check the 4.0.4 → 4.0.5 delta upstream (GitHub releases for
+`jlowin/fastmcp`, or gofastmcp.com/updates). A patch bump is unlikely to add breaking changes, but
+"unlikely" is not "verified" — and every other claim in this report was verified. If 4.0.5 does
+change something relevant, **report it to the architect before proceeding**; the report is wrong and
+Phases 1–2 may have been built on a stale assumption.
+
+### 7. Residual checks
 
 - `grep -rn '\.ping(' nocodb/ nocobot/` — `client.ping()` **raises on the modern protocol era**
   (report §3.5). Expected zero hits; confirm.

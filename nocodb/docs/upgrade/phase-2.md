@@ -69,23 +69,21 @@ Also fix the `sed` block at `:106-112`: it targets `cli/SKILL.md`, but the actua
   = 63 CLI commands.** Both numbers are correct in their own context. Do not blindly overwrite 60
   with 63 — state which each document means.
 
-### 4. Fix the venv / editable-install drift
+### 4. Resolve the package version skew
 
-Report §2.1:
-- Installed `fastmcp==3.0.0` is **below** the declared `>=3.0.2` floor.
-- `nocodb/__init__.py` declares `__version__ = "3.1.0"` but dist metadata says `nocodb 3.0.0`.
-- `__editable___nocodb_3_0_0_finder.py` points at `/Users/stevegoldberg/Code/Utils/nocodb/nocodb` —
-  **a path that no longer exists** (repo moved to `Code/_utils/`). Imports resolve only because
-  pytest puts rootdir on `sys.path`.
+> **SCOPE CHANGE (report §6.1).** The venv upgrade and editable-install repair that were originally
+> yours **moved to Phase 1, step 0**. By the time you start, `fastmcp` should be **3.4.7**, the
+> declared floor should read `fastmcp>=3.4.7,<4`, and the editable finder should point at the real
+> path. **Verify all three on arrival** — if any is not true, Phase 1 did not finish its step 0 and
+> you should escalate rather than doing it yourself.
 
-Reinstall the editable package so the finder points at the real path, and bring `fastmcp` up to a
-3.x release that satisfies `>=3.0.2,<4` (Phase 0's cap must hold — verify it does).
+What remains yours is the version-number skew only: `nocodb/__init__.py` declares
+`__version__ = "3.1.0"` but the installed dist metadata says `nocodb 3.0.0` (report §2.1).
 
-Decide and state whether the `3.1.0` vs `3.0.0` skew is a release that was never cut or a version
-bump that was never installed. Do not silently renumber.
-
-**Re-run the Phase 1 test suite after reinstalling.** If those tests were passing on 3.0.0 and fail
-on 3.0.2+, that is a real finding — report it, do not paper over it.
+Decide and state whether that is a release that was never cut, or a version bump that was never
+installed. **Do not silently renumber either side** — pick the correct one, say why, and make them
+agree. Note `CLAUDE.md` also claims "v3.1.0 - Feature complete (123 tests)", while the suite
+actually collects 209; fold that into your reconciliation in step 3.
 
 ---
 
