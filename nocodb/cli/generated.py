@@ -10,7 +10,7 @@ import sys
 from typing import Annotated
 
 import cyclopts
-import mcp.types
+import mcp_types
 from rich.console import Console
 
 from fastmcp import Client
@@ -38,7 +38,7 @@ console = Console()
 def _print_tool_result(result):
     if result.is_error:
         for block in result.content:
-            if isinstance(block, mcp.types.TextContent):
+            if isinstance(block, mcp_types.TextContent):
                 console.print(f"[bold red]Error:[/bold red] {block.text}")
             else:
                 console.print(f"[bold red]Error:[/bold red] {block}")
@@ -49,14 +49,14 @@ def _print_tool_result(result):
         return
 
     for block in result.content:
-        if isinstance(block, mcp.types.TextContent):
+        if isinstance(block, mcp_types.TextContent):
             console.print(block.text)
-        elif isinstance(block, mcp.types.ImageContent):
+        elif isinstance(block, mcp_types.ImageContent):
             size = len(block.data) * 3 // 4
-            console.print(f"[dim][Image: {block.mimeType}, ~{size} bytes][/dim]")
-        elif isinstance(block, mcp.types.AudioContent):
+            console.print(f"[dim][Image: {block.mime_type}, ~{size} bytes][/dim]")
+        elif isinstance(block, mcp_types.AudioContent):
             size = len(block.data) * 3 // 4
-            console.print(f"[dim][Audio: {block.mimeType}, ~{size} bytes][/dim]")
+            console.print(f"[dim][Audio: {block.mime_type}, ~{size} bytes][/dim]")
 
 
 async def _call_tool(tool_name: str, arguments: dict) -> None:
@@ -88,8 +88,8 @@ async def list_tools() -> None:
             return
         for tool in tools:
             sig_parts = []
-            props = tool.inputSchema.get("properties", {})
-            required = set(tool.inputSchema.get("required", []))
+            props = tool.input_schema.get("properties", {})
+            required = set(tool.input_schema.get("required", []))
             for pname, pschema in props.items():
                 ptype = pschema.get("type", "string")
                 if pname in required:
@@ -126,11 +126,11 @@ async def read_resource(uri: Annotated[str, cyclopts.Parameter(help="Resource UR
     async with Client(CLIENT_SPEC) as client:
         contents = await client.read_resource(uri)
         for block in contents:
-            if isinstance(block, mcp.types.TextResourceContents):
+            if isinstance(block, mcp_types.TextResourceContents):
                 console.print(block.text)
-            elif isinstance(block, mcp.types.BlobResourceContents):
+            elif isinstance(block, mcp_types.BlobResourceContents):
                 size = len(block.blob) * 3 // 4
-                console.print(f"[dim][Blob: {block.mimeType}, ~{size} bytes][/dim]")
+                console.print(f"[dim][Blob: {block.mime_type}, ~{size} bytes][/dim]")
 
 
 @app.command
@@ -170,11 +170,11 @@ async def get_prompt(
         result = await client.get_prompt(name, parsed or None)
         for msg in result.messages:
             console.print(f"[bold]{msg.role}:[/bold]")
-            if isinstance(msg.content, mcp.types.TextContent):
+            if isinstance(msg.content, mcp_types.TextContent):
                 console.print(f"  {msg.content.text}")
-            elif isinstance(msg.content, mcp.types.ImageContent):
+            elif isinstance(msg.content, mcp_types.ImageContent):
                 size = len(msg.content.data) * 3 // 4
-                console.print(f"  [dim][Image: {msg.content.mimeType}, ~{size} bytes][/dim]")
+                console.print(f"  [dim][Image: {msg.content.mime_type}, ~{size} bytes][/dim]")
             else:
                 console.print(f"  {msg.content}")
             console.print()
@@ -187,35 +187,15 @@ async def get_prompt(
 @call_tool_app.command(name='records_list')
 async def records_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    fields: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    sort: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    where: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    page: Annotated[int, cyclopts.Parameter(help="")] = 1,
-    page_size: Annotated[int, cyclopts.Parameter(help="")] = 25,
-    view_id: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    fields: Annotated[str | None, cyclopts.Parameter(help="Comma-separated field names to include (e.g., \"Name,Email,Status\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Comma-separated field names to include (e.g., \\\"Name,Email,Status\\\")\"\n                          }")] = None,
+    sort: Annotated[str | None, cyclopts.Parameter(help="Sort field(s), prefix with - for descending (e.g., \"-CreatedAt\" or \"Name,-Age\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Sort field(s), prefix with - for descending (e.g., \\\"-CreatedAt\\\" or \\\"Name,-Age\\\")\"\n                          }")] = None,
+    where: Annotated[str | None, cyclopts.Parameter(help="Filter condition using NocoDB syntax (e.g., \"(Status,eq,Active)\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Filter condition using NocoDB syntax (e.g., \\\"(Status,eq,Active)\\\")\"\n                          }")] = None,
+    page: Annotated[int, cyclopts.Parameter(help="Page number (1-indexed, default: 1)")] = 1,
+    page_size: Annotated[int, cyclopts.Parameter(help="Records per page (default: 25, max: 1000)")] = 25,
+    view_id: Annotated[str | None, cyclopts.Parameter(help="Optional view ID to filter by\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional view ID to filter by\"\n                          }")] = None,
 ) -> None:
-    '''List records from a table with optional filtering and pagination.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    fields: Comma-separated field names to include (e.g., "Name,Email,Status")
-    sort: Sort field(s), prefix with - for descending (e.g., "-CreatedAt" or "Name,-Age")
-    where: Filter condition using NocoDB syntax (e.g., "(Status,eq,Active)")
-    page: Page number (1-indexed, default: 1)
-    page_size: Records per page (default: 25, max: 1000)
-    view_id: Optional view ID to filter by
-
-Returns:
-    RecordsListResult with records array and pagination info.
-
-Filter syntax examples:
-    - Equal: (Status,eq,Active)
-    - Not equal: (Status,neq,Deleted)
-    - Like: (Name,like,%john%)
-    - Greater than: (Age,gt,18)
-    - Is null: (Email,is,null)
-    - Multiple: (Status,eq,Active)~and(Priority,eq,High)'''
+    '''List records from a table with optional filtering and pagination.'''
     # Parse JSON parameters
     fields_parsed = json.loads(fields) if isinstance(fields, str) else fields
     sort_parsed = json.loads(sort) if isinstance(sort, str) else sort
@@ -228,24 +208,15 @@ Filter syntax examples:
 @call_tool_app.command(name='records_list_all')
 async def records_list_all(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    where: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    page_size: Annotated[int, cyclopts.Parameter(help="")] = 100,
-    max_pages: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    where: Annotated[str | None, cyclopts.Parameter(help="Optional filter condition\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional filter condition\"\n                          }")] = None,
+    page_size: Annotated[int, cyclopts.Parameter(help="Records per page (default: 100)")] = 100,
+    max_pages: Annotated[str | None, cyclopts.Parameter(help="Maximum pages to fetch (None = unlimited)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Maximum pages to fetch (None = unlimited)\"\n                          }")] = None,
 ) -> None:
     '''Fetch all records from a table, automatically handling pagination.
 
 Use with caution on large tables. Consider using records_list with
-pagination for better control.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    where: Optional filter condition
-    page_size: Records per page (default: 100)
-    max_pages: Maximum pages to fetch (None = unlimited)
-
-Returns:
-    List of all matching records.'''
+pagination for better control.'''
     # Parse JSON parameters
     where_parsed = json.loads(where) if isinstance(where, str) else where
     max_pages_parsed = json.loads(max_pages) if isinstance(max_pages, str) else max_pages
@@ -256,36 +227,20 @@ Returns:
 @call_tool_app.command(name='record_get')
 async def record_get(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    record_id: Annotated[str, cyclopts.Parameter(help="The record ID (e.g., \"1\" or \"rec_xxx\")")],
 ) -> None:
-    '''Get a single record by ID.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    record_id: The record ID (e.g., "1" or "rec_xxx")
-
-Returns:
-    RecordResult with id and fields.'''
+    '''Get a single record by ID.'''
     await _call_tool('record_get', {'table_id': table_id, 'record_id': record_id})
 
 
 @call_tool_app.command(name='records_create')
 async def records_create(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    records: Annotated[str, cyclopts.Parameter(help="JSON Schema: {\n                            \"items\": {\n                              \"additionalProperties\": true,\n                              \"type\": \"object\"\n                            },\n                            \"type\": \"array\"\n                          }")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    records: Annotated[str, cyclopts.Parameter(help="List of record data dicts. Each dict should contain field values.\nExample: [{\"Name\": \"John\", \"Email\": \"john@example.com\"}]\nFor batch: [{\"Name\": \"A\"}, {\"Name\": \"B\"}, {\"Name\": \"C\"}]\\nJSON Schema: {\n                            \"items\": {\n                              \"additionalProperties\": true,\n                              \"type\": \"object\"\n                            },\n                            \"type\": \"array\",\n                            \"description\": \"List of record data dicts. Each dict should contain field values.\\nExample: [{\\\"Name\\\": \\\"John\\\", \\\"Email\\\": \\\"john@example.com\\\"}]\\nFor batch: [{\\\"Name\\\": \\\"A\\\"}, {\\\"Name\\\": \\\"B\\\"}, {\\\"Name\\\": \\\"C\\\"}]\"\n                          }")],
 ) -> None:
-    '''Create one or more records in a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    records: List of record data dicts. Each dict should contain field values.
-        Example: [{"Name": "John", "Email": "john@example.com"}]
-        For batch: [{"Name": "A"}, {"Name": "B"}, {"Name": "C"}]
-
-Returns:
-    RecordsMutationResult with created records.'''
+    '''Create one or more records in a table.'''
     # Parse JSON parameters
     records_parsed = json.loads(records) if isinstance(records, str) else records
 
@@ -295,19 +250,10 @@ Returns:
 @call_tool_app.command(name='records_update')
 async def records_update(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    records: Annotated[str, cyclopts.Parameter(help="JSON Schema: {\n                            \"items\": {\n                              \"additionalProperties\": true,\n                              \"type\": \"object\"\n                            },\n                            \"type\": \"array\"\n                          }")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    records: Annotated[str, cyclopts.Parameter(help="List of record updates. Each dict must have \"id\" and field values.\nExample: [{\"id\": 1, \"Status\": \"Done\"}]\nFor batch: [{\"id\": 1, \"Status\": \"A\"}, {\"id\": 2, \"Status\": \"B\"}]\\nJSON Schema: {\n                            \"items\": {\n                              \"additionalProperties\": true,\n                              \"type\": \"object\"\n                            },\n                            \"type\": \"array\",\n                            \"description\": \"List of record updates. Each dict must have \\\"id\\\" and field values.\\nExample: [{\\\"id\\\": 1, \\\"Status\\\": \\\"Done\\\"}]\\nFor batch: [{\\\"id\\\": 1, \\\"Status\\\": \\\"A\\\"}, {\\\"id\\\": 2, \\\"Status\\\": \\\"B\\\"}]\"\n                          }")],
 ) -> None:
-    '''Update one or more records in a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    records: List of record updates. Each dict must have "id" and field values.
-        Example: [{"id": 1, "Status": "Done"}]
-        For batch: [{"id": 1, "Status": "A"}, {"id": 2, "Status": "B"}]
-
-Returns:
-    RecordsMutationResult with updated records.'''
+    '''Update one or more records in a table.'''
     # Parse JSON parameters
     records_parsed = json.loads(records) if isinstance(records, str) else records
 
@@ -317,38 +263,23 @@ Returns:
 @call_tool_app.command(name='records_delete')
 async def records_delete(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_ids: Annotated[list[str], cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    record_ids: Annotated[list[str], cyclopts.Parameter(help="List of record IDs to delete (e.g., [\"1\", \"2\", \"3\"])")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
     '''Delete one or more records from a table.
 
-DESTRUCTIVE: This operation cannot be undone. Set confirm=True to proceed.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    record_ids: List of record IDs to delete (e.g., ["1", "2", "3"])
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    RecordsMutationResult with deleted record IDs.'''
+DESTRUCTIVE: This operation cannot be undone. Set confirm=True to proceed.'''
     await _call_tool('records_delete', {'table_id': table_id, 'record_ids': record_ids, 'confirm': confirm})
 
 
 @call_tool_app.command(name='records_count')
 async def records_count(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    where: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    where: Annotated[str | None, cyclopts.Parameter(help="Optional filter condition (e.g., \"(Status,eq,Active)\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional filter condition (e.g., \\\"(Status,eq,Active)\\\")\"\n                          }")] = None,
 ) -> None:
-    '''Count records in a table, optionally filtered.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    where: Optional filter condition (e.g., "(Status,eq,Active)")
-
-Returns:
-    RecordsCountResult with count.'''
+    '''Count records in a table, optionally filtered.'''
     # Parse JSON parameters
     where_parsed = json.loads(where) if isinstance(where, str) else where
 
@@ -396,51 +327,19 @@ Returns:
 @call_tool_app.command(name='table_get')
 async def table_get(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
-    '''Get detailed information about a table including its fields.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    TableResult with id, title, fields, and metadata.'''
+    '''Get detailed information about a table including its fields.'''
     await _call_tool('table_get', {'table_id': table_id})
 
 
 @call_tool_app.command(name='table_create')
 async def table_create(
     *,
-    title: Annotated[str, cyclopts.Parameter(help="")],
-    fields: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"items\": {\n                                  \"additionalProperties\": true,\n                                  \"type\": \"object\"\n                                },\n                                \"type\": \"array\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    title: Annotated[str, cyclopts.Parameter(help="The table title (e.g., \"Users\", \"Tasks\")")],
+    fields: Annotated[str | None, cyclopts.Parameter(help="Optional list of field definitions to create with the table.\nEach field should have \"title\" and \"type\" keys.\nExample: [{\"title\": \"Name\", \"type\": \"SingleLineText\"}, {\"title\": \"Email\", \"type\": \"Email\"}]\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"items\": {\n                                  \"additionalProperties\": true,\n                                  \"type\": \"object\"\n                                },\n                                \"type\": \"array\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional list of field definitions to create with the table.\\nEach field should have \\\"title\\\" and \\\"type\\\" keys.\\nExample: [{\\\"title\\\": \\\"Name\\\", \\\"type\\\": \\\"SingleLineText\\\"}, {\\\"title\\\": \\\"Email\\\", \\\"type\\\": \\\"Email\\\"}]\"\n                          }")] = None,
 ) -> None:
-    '''Create a new table in the current base.
-
-Args:
-    title: The table title (e.g., "Users", "Tasks")
-    fields: Optional list of field definitions to create with the table.
-        Each field should have "title" and "type" keys.
-        Example: [{"title": "Name", "type": "SingleLineText"}, {"title": "Email", "type": "Email"}]
-
-Returns:
-    TableResult with created table details.
-
-Field types:
-    - SingleLineText: Short text
-    - LongText: Multi-line text
-    - Number: Integer
-    - Decimal: Float (options: {"precision": 2})
-    - Email: Email address
-    - URL: Web link
-    - PhoneNumber: Phone
-    - Date: Date only
-    - DateTime: Date + time
-    - Checkbox: Boolean
-    - SingleSelect: Dropdown (options: {"options": {"choices": [{"title": "A"}]}})
-    - MultiSelect: Multi-dropdown
-    - Rating: Star rating
-    - Attachment: File upload
-    - Links: Relationship to another table'''
+    '''Create a new table in the current base.'''
     # Parse JSON parameters
     fields_parsed = json.loads(fields) if isinstance(fields, str) else fields
 
@@ -450,21 +349,12 @@ Field types:
 @call_tool_app.command(name='table_update')
 async def table_update(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    title: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    icon: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    meta: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    title: Annotated[str | None, cyclopts.Parameter(help="New table title\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New table title\"\n                          }")] = None,
+    icon: Annotated[str | None, cyclopts.Parameter(help="Table icon (emoji, e.g., \"🎯\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Table icon (emoji, e.g., \\\"🎯\\\")\"\n                          }")] = None,
+    meta: Annotated[str | None, cyclopts.Parameter(help="Additional metadata dict\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Additional metadata dict\"\n                          }")] = None,
 ) -> None:
-    '''Update a table\'s metadata.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    title: New table title
-    icon: Table icon (emoji, e.g., "🎯")
-    meta: Additional metadata dict
-
-Returns:
-    TableResult with updated table details.'''
+    '''Update a table\'s metadata.'''
     # Parse JSON parameters
     title_parsed = json.loads(title) if isinstance(title, str) else title
     icon_parsed = json.loads(icon) if isinstance(icon, str) else icon
@@ -476,100 +366,43 @@ Returns:
 @call_tool_app.command(name='table_delete')
 async def table_delete(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
     '''Delete a table and all its data.
 
 DESTRUCTIVE: This permanently deletes the table, all its fields,
-and ALL RECORDS. This cannot be undone. Set confirm=True to proceed.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    TableDeleteResult with success status.'''
+and ALL RECORDS. This cannot be undone. Set confirm=True to proceed.'''
     await _call_tool('table_delete', {'table_id': table_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='fields_list')
 async def fields_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
-    '''List all fields in a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    FieldsListResult with list of fields including id, title, type, and options.'''
+    '''List all fields in a table.'''
     await _call_tool('fields_list', {'table_id': table_id})
 
 
 @call_tool_app.command(name='field_get')
 async def field_get(
     *,
-    field_id: Annotated[str, cyclopts.Parameter(help="")],
+    field_id: Annotated[str, cyclopts.Parameter(help="The field ID (e.g., \"fld_xxx\")")],
 ) -> None:
-    '''Get detailed information about a field.
-
-Args:
-    field_id: The field ID (e.g., "fld_xxx")
-
-Returns:
-    FieldResult with id, title, type, and options.'''
+    '''Get detailed information about a field.'''
     await _call_tool('field_get', {'field_id': field_id})
 
 
 @call_tool_app.command(name='field_create')
 async def field_create(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    title: Annotated[str, cyclopts.Parameter(help="")],
-    field_type: Annotated[str, cyclopts.Parameter(help="")],
-    options: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    title: Annotated[str, cyclopts.Parameter(help="The field title (e.g., \"Status\", \"Email\")")],
+    field_type: Annotated[str, cyclopts.Parameter(help="The field type (see list below)")],
+    options: Annotated[str | None, cyclopts.Parameter(help="Optional field-specific options\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional field-specific options\"\n                          }")] = None,
 ) -> None:
-    '''Create a new field in a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    title: The field title (e.g., "Status", "Email")
-    field_type: The field type (see list below)
-    options: Optional field-specific options
-
-Returns:
-    FieldResult with created field details.
-
-Field types:
-    - SingleLineText: Short text
-    - LongText: Multi-line text
-    - Number: Integer
-    - Decimal: Float (options: {"precision": 2})
-    - Currency: Money (options: {"locale": "en-US", "code": "USD"})
-    - Percent: Percentage
-    - Email: Email address
-    - URL: Web link
-    - PhoneNumber: Phone
-    - Date: Date only (options: {"date_format": "YYYY-MM-DD"})
-    - DateTime: Date + time
-    - Time: Time only
-    - Duration: Time span
-    - Checkbox: Boolean
-    - SingleSelect: Dropdown
-        options: {"options": {"choices": [{"title": "A", "color": "#00FF00"}]}}
-    - MultiSelect: Multi-dropdown (same options as SingleSelect)
-    - Rating: Star rating (options: {"max": 5})
-    - Attachment: File upload
-    - Links: Relationship
-        options: {"relation_type": "hm", "related_table_id": "tbl_xxx"}
-        relation_type: "hm" (has many), "bt" (belongs to), "mm" (many to many)
-    - Lookup: Related field value
-    - Rollup: Aggregation of related records
-    - Formula: Calculated field (options: {"formula": "..."})
-
-SingleSelect/MultiSelect colors: Use HEX codes like "#00FF00", not color names.'''
+    '''Create a new field in a table.'''
     # Parse JSON parameters
     options_parsed = json.loads(options) if isinstance(options, str) else options
 
@@ -579,21 +412,13 @@ SingleSelect/MultiSelect colors: Use HEX codes like "#00FF00", not color names.'
 @call_tool_app.command(name='field_update')
 async def field_update(
     *,
-    field_id: Annotated[str, cyclopts.Parameter(help="")],
-    title: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    options: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    field_id: Annotated[str, cyclopts.Parameter(help="The field ID (e.g., \"fld_xxx\")")],
+    title: Annotated[str | None, cyclopts.Parameter(help="New field title\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New field title\"\n                          }")] = None,
+    options: Annotated[str | None, cyclopts.Parameter(help="New field options (not for colOptions updates)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New field options (not for colOptions updates)\"\n                          }")] = None,
 ) -> None:
     '''Update a field\'s metadata.
 
-Note: For updating SingleSelect/MultiSelect colors, use field_update_options instead.
-
-Args:
-    field_id: The field ID (e.g., "fld_xxx")
-    title: New field title
-    options: New field options (not for colOptions updates)
-
-Returns:
-    FieldResult with updated field details.'''
+Note: For updating SingleSelect/MultiSelect colors, use field_update_options instead.'''
     # Parse JSON parameters
     title_parsed = json.loads(title) if isinstance(title, str) else title
     options_parsed = json.loads(options) if isinstance(options, str) else options
@@ -604,30 +429,13 @@ Returns:
 @call_tool_app.command(name='field_update_options')
 async def field_update_options(
     *,
-    field_id: Annotated[str, cyclopts.Parameter(help="")],
-    col_options: Annotated[str, cyclopts.Parameter(help="JSON Schema: {\n                            \"additionalProperties\": true,\n                            \"type\": \"object\"\n                          }")],
+    field_id: Annotated[str, cyclopts.Parameter(help="The field ID (e.g., \"fld_xxx\")")],
+    col_options: Annotated[str, cyclopts.Parameter(help="The colOptions dict with updated choices.\nExample for SingleSelect colors:\n{\n    \"options\": [\n        {\"id\": \"opt_xxx\", \"title\": \"Active\", \"color\": \"#00FF00\"},\n        {\"id\": \"opt_yyy\", \"title\": \"Inactive\", \"color\": \"#FF0000\"}\n    ]\n}\\nJSON Schema: {\n                            \"additionalProperties\": true,\n                            \"type\": \"object\",\n                            \"description\": \"The colOptions dict with updated choices.\\nExample for SingleSelect colors:\\n{\\n    \\\"options\\\": [\\n        {\\\"id\\\": \\\"opt_xxx\\\", \\\"title\\\": \\\"Active\\\", \\\"color\\\": \\\"#00FF00\\\"},\\n        {\\\"id\\\": \\\"opt_yyy\\\", \\\"title\\\": \\\"Inactive\\\", \\\"color\\\": \\\"#FF0000\\\"}\\n    ]\\n}\"\n                          }")],
 ) -> None:
     '''Update a field\'s colOptions using v2 API.
 
 Use this specifically for updating SingleSelect/MultiSelect choice colors,
-which requires the v2 column update API.
-
-Args:
-    field_id: The field ID (e.g., "fld_xxx")
-    col_options: The colOptions dict with updated choices.
-        Example for SingleSelect colors:
-        {
-            "options": [
-                {"id": "opt_xxx", "title": "Active", "color": "#00FF00"},
-                {"id": "opt_yyy", "title": "Inactive", "color": "#FF0000"}
-            ]
-        }
-
-Returns:
-    FieldResult with updated field details.
-
-Note: You must include the option "id" for existing options.
-Get the current option IDs using field_get first.'''
+which requires the v2 column update API.'''
     # Parse JSON parameters
     col_options_parsed = json.loads(col_options) if isinstance(col_options, str) else col_options
 
@@ -637,49 +445,27 @@ Get the current option IDs using field_get first.'''
 @call_tool_app.command(name='field_delete')
 async def field_delete(
     *,
-    field_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    field_id: Annotated[str, cyclopts.Parameter(help="The field ID (e.g., \"fld_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
     '''Delete a field from a table.
 
 DESTRUCTIVE: This permanently deletes the field and ALL DATA in that field
-across all records. This cannot be undone. Set confirm=True to proceed.
-
-Args:
-    field_id: The field ID (e.g., "fld_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    FieldDeleteResult with success status.'''
+across all records. This cannot be undone. Set confirm=True to proceed.'''
     await _call_tool('field_delete', {'field_id': field_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='linked_records_list')
 async def linked_records_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    link_field_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_id: Annotated[str, cyclopts.Parameter(help="")],
-    fields: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    sort: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    where: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID containing the link field (e.g., \"tbl_xxx\")")],
+    link_field_id: Annotated[str, cyclopts.Parameter(help="The Links field ID (e.g., \"fld_xxx\")")],
+    record_id: Annotated[str, cyclopts.Parameter(help="The record ID to get linked records for")],
+    fields: Annotated[str | None, cyclopts.Parameter(help="Comma-separated field names to include from linked records\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Comma-separated field names to include from linked records\"\n                          }")] = None,
+    sort: Annotated[str | None, cyclopts.Parameter(help="Sort field(s), prefix with - for descending\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Sort field(s), prefix with - for descending\"\n                          }")] = None,
+    where: Annotated[str | None, cyclopts.Parameter(help="Filter condition for linked records\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Filter condition for linked records\"\n                          }")] = None,
 ) -> None:
-    '''List records linked to a specific record via a Links field.
-
-Args:
-    table_id: The table ID containing the link field (e.g., "tbl_xxx")
-    link_field_id: The Links field ID (e.g., "fld_xxx")
-    record_id: The record ID to get linked records for
-    fields: Comma-separated field names to include from linked records
-    sort: Sort field(s), prefix with - for descending
-    where: Filter condition for linked records
-
-Returns:
-    LinkedRecordsResult with linked records.
-
-Example:
-    # Get all tasks linked to a project
-    linked_records_list("tbl_projects", "fld_tasks_link", "1")'''
+    '''List records linked to a specific record via a Links field.'''
     # Parse JSON parameters
     fields_parsed = json.loads(fields) if isinstance(fields, str) else fields
     sort_parsed = json.loads(sort) if isinstance(sort, str) else sort
@@ -691,103 +477,54 @@ Example:
 @call_tool_app.command(name='linked_records_link')
 async def linked_records_link(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    link_field_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_id: Annotated[str, cyclopts.Parameter(help="")],
-    target_ids: Annotated[list[str], cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID containing the link field (e.g., \"tbl_xxx\")")],
+    link_field_id: Annotated[str, cyclopts.Parameter(help="The Links field ID (e.g., \"fld_xxx\")")],
+    record_id: Annotated[str, cyclopts.Parameter(help="The source record ID to link from")],
+    target_ids: Annotated[list[str], cyclopts.Parameter(help="List of record IDs to link to (e.g., [\"1\", \"2\", \"3\"])")],
 ) -> None:
     '''Link records together via a Links field.
 
-Creates a relationship between the source record and target records.
-
-Args:
-    table_id: The table ID containing the link field (e.g., "tbl_xxx")
-    link_field_id: The Links field ID (e.g., "fld_xxx")
-    record_id: The source record ID to link from
-    target_ids: List of record IDs to link to (e.g., ["1", "2", "3"])
-
-Returns:
-    LinkedRecordsResult with linked record references.
-
-Example:
-    # Link tasks 1, 2, 3 to project 5
-    linked_records_link("tbl_projects", "fld_tasks_link", "5", ["1", "2", "3"])'''
+Creates a relationship between the source record and target records.'''
     await _call_tool('linked_records_link', {'table_id': table_id, 'link_field_id': link_field_id, 'record_id': record_id, 'target_ids': target_ids})
 
 
 @call_tool_app.command(name='linked_records_unlink')
 async def linked_records_unlink(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    link_field_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_id: Annotated[str, cyclopts.Parameter(help="")],
-    target_ids: Annotated[list[str], cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID containing the link field (e.g., \"tbl_xxx\")")],
+    link_field_id: Annotated[str, cyclopts.Parameter(help="The Links field ID (e.g., \"fld_xxx\")")],
+    record_id: Annotated[str, cyclopts.Parameter(help="The source record ID to unlink from")],
+    target_ids: Annotated[list[str], cyclopts.Parameter(help="List of record IDs to unlink (e.g., [\"1\", \"2\"])")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with unlinking")] = False,
 ) -> None:
     '''Unlink records from a Links field relationship.
 
 Removes the relationship between records. Does NOT delete the records themselves.
 
-DESTRUCTIVE: Set confirm=True to proceed.
-
-Args:
-    table_id: The table ID containing the link field (e.g., "tbl_xxx")
-    link_field_id: The Links field ID (e.g., "fld_xxx")
-    record_id: The source record ID to unlink from
-    target_ids: List of record IDs to unlink (e.g., ["1", "2"])
-    confirm: Must be True to proceed with unlinking
-
-Returns:
-    LinkedRecordsResult with unlinked record references.
-
-Example:
-    # Unlink task 2 from project 5
-    linked_records_unlink("tbl_projects", "fld_tasks_link", "5", ["2"], confirm=True)'''
+DESTRUCTIVE: Set confirm=True to proceed.'''
     await _call_tool('linked_records_unlink', {'table_id': table_id, 'link_field_id': link_field_id, 'record_id': record_id, 'target_ids': target_ids, 'confirm': confirm})
 
 
 @call_tool_app.command(name='views_list')
 async def views_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
     '''List all views for a table.
 
-Views include Grid, Gallery, Form, Kanban, and Calendar views.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    ViewsListResult with list of views including id, title, and type.
-
-View types (numeric):
-    - 3: Grid
-    - 4: Form
-    - 5: Gallery
-    - 6: Kanban
-    - 7: Calendar'''
+Views include Grid, Gallery, Form, Kanban, and Calendar views.'''
     await _call_tool('views_list', {'table_id': table_id})
 
 
 @call_tool_app.command(name='view_update')
 async def view_update(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    title: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    icon: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    meta: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    title: Annotated[str | None, cyclopts.Parameter(help="New view title\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New view title\"\n                          }")] = None,
+    icon: Annotated[str | None, cyclopts.Parameter(help="View icon (emoji, e.g., \"📊\")\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"View icon (emoji, e.g., \\\"📊\\\")\"\n                          }")] = None,
+    meta: Annotated[str | None, cyclopts.Parameter(help="Additional metadata dict\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"additionalProperties\": true,\n                                \"type\": \"object\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Additional metadata dict\"\n                          }")] = None,
 ) -> None:
-    '''Update a view\'s metadata.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    title: New view title
-    icon: View icon (emoji, e.g., "📊")
-    meta: Additional metadata dict
-
-Returns:
-    ViewResult with updated view details.'''
+    '''Update a view\'s metadata.'''
     # Parse JSON parameters
     title_parsed = json.loads(title) if isinstance(title, str) else title
     icon_parsed = json.loads(icon) if isinstance(icon, str) else icon
@@ -799,92 +536,43 @@ Returns:
 @call_tool_app.command(name='view_delete')
 async def view_delete(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
     '''Delete a view.
 
 This only deletes the view, not the underlying data.
-Records remain intact.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    ViewDeleteResult with success status.'''
+Records remain intact.'''
     await _call_tool('view_delete', {'view_id': view_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='view_filters_list')
 async def view_filters_list(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
 ) -> None:
-    '''List all filters for a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-
-Returns:
-    ViewFiltersListResult with list of filters.'''
+    '''List all filters for a view.'''
     await _call_tool('view_filters_list', {'view_id': view_id})
 
 
 @call_tool_app.command(name='view_filter_get')
 async def view_filter_get(
     *,
-    filter_id: Annotated[str, cyclopts.Parameter(help="")],
+    filter_id: Annotated[str, cyclopts.Parameter(help="The filter ID (e.g., \"flt_xxx\")")],
 ) -> None:
-    '''Get details of a single filter.
-
-Args:
-    filter_id: The filter ID (e.g., "flt_xxx")
-
-Returns:
-    ViewFilterResult with filter details.'''
+    '''Get details of a single filter.'''
     await _call_tool('view_filter_get', {'filter_id': filter_id})
 
 
 @call_tool_app.command(name='view_filter_create')
 async def view_filter_create(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    fk_column_id: Annotated[str, cyclopts.Parameter(help="")],
-    comparison_op: Annotated[str, cyclopts.Parameter(help="")],
-    value: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\"\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    fk_column_id: Annotated[str, cyclopts.Parameter(help="The column/field ID to filter on (e.g., \"fld_xxx\")")],
+    comparison_op: Annotated[str, cyclopts.Parameter(help="The comparison operator")],
+    value: Annotated[str | None, cyclopts.Parameter(help="The filter value (not needed for null/empty checks)\\nJSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\",\n                            \"description\": \"The filter value (not needed for null/empty checks)\"\n                          }")] = None,
 ) -> None:
-    '''Create a new filter for a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    fk_column_id: The column/field ID to filter on (e.g., "fld_xxx")
-    comparison_op: The comparison operator
-    value: The filter value (not needed for null/empty checks)
-
-Returns:
-    ViewFilterResult with created filter details.
-
-Comparison operators:
-    - eq: Equal
-    - neq: Not equal
-    - like: Contains (use % wildcards)
-    - nlike: Does not contain
-    - gt: Greater than
-    - lt: Less than
-    - gte: Greater than or equal
-    - lte: Less than or equal
-    - is: Is null/notnull
-    - isnot: Is not null
-    - empty: Is empty
-    - notempty: Is not empty
-    - in: In array (comma-separated values)
-    - notin: Not in array
-
-Examples:
-    - view_filter_create("vw_xxx", "fld_status", "eq", "Active")
-    - view_filter_create("vw_xxx", "fld_age", "gt", 18)
-    - view_filter_create("vw_xxx", "fld_email", "is", "notnull")'''
+    '''Create a new filter for a view.'''
     # Parse JSON parameters
     value_parsed = json.loads(value) if isinstance(value, str) else value
 
@@ -894,21 +582,12 @@ Examples:
 @call_tool_app.command(name='view_filter_update')
 async def view_filter_update(
     *,
-    filter_id: Annotated[str, cyclopts.Parameter(help="")],
-    fk_column_id: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    comparison_op: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    value: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\"\n                          }")] = None,
+    filter_id: Annotated[str, cyclopts.Parameter(help="The filter ID (e.g., \"flt_xxx\")")],
+    fk_column_id: Annotated[str | None, cyclopts.Parameter(help="New column/field ID\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New column/field ID\"\n                          }")] = None,
+    comparison_op: Annotated[str | None, cyclopts.Parameter(help="New comparison operator\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New comparison operator\"\n                          }")] = None,
+    value: Annotated[str | None, cyclopts.Parameter(help="New filter value\\nJSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\",\n                            \"description\": \"New filter value\"\n                          }")] = None,
 ) -> None:
-    '''Update an existing filter.
-
-Args:
-    filter_id: The filter ID (e.g., "flt_xxx")
-    fk_column_id: New column/field ID
-    comparison_op: New comparison operator
-    value: New filter value
-
-Returns:
-    ViewFilterResult with updated filter details.'''
+    '''Update an existing filter.'''
     # Parse JSON parameters
     fk_column_id_parsed = json.loads(fk_column_id) if isinstance(fk_column_id, str) else fk_column_id
     comparison_op_parsed = json.loads(comparison_op) if isinstance(comparison_op, str) else comparison_op
@@ -920,102 +599,61 @@ Returns:
 @call_tool_app.command(name='view_filter_delete')
 async def view_filter_delete(
     *,
-    filter_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    filter_id: Annotated[str, cyclopts.Parameter(help="The filter ID (e.g., \"flt_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
-    '''Delete a filter from a view.
-
-Args:
-    filter_id: The filter ID (e.g., "flt_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    ViewFilterDeleteResult with success status.'''
+    '''Delete a filter from a view.'''
     await _call_tool('view_filter_delete', {'filter_id': filter_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='view_filter_children')
 async def view_filter_children(
     *,
-    filter_group_id: Annotated[str, cyclopts.Parameter(help="")],
+    filter_group_id: Annotated[str, cyclopts.Parameter(help="The parent filter group ID")],
 ) -> None:
     '''Get children filters of a filter group.
 
-Filter groups allow nested AND/OR logic.
-
-Args:
-    filter_group_id: The parent filter group ID
-
-Returns:
-    ViewFiltersListResult with child filters.'''
+Filter groups allow nested AND/OR logic.'''
     await _call_tool('view_filter_children', {'filter_group_id': filter_group_id})
 
 
 @call_tool_app.command(name='view_sorts_list')
 async def view_sorts_list(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
 ) -> None:
-    '''List all sorts for a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-
-Returns:
-    ViewSortsListResult with list of sorts.'''
+    '''List all sorts for a view.'''
     await _call_tool('view_sorts_list', {'view_id': view_id})
 
 
 @call_tool_app.command(name='view_sort_get')
 async def view_sort_get(
     *,
-    sort_id: Annotated[str, cyclopts.Parameter(help="")],
+    sort_id: Annotated[str, cyclopts.Parameter(help="The sort ID (e.g., \"srt_xxx\")")],
 ) -> None:
-    '''Get details of a single sort.
-
-Args:
-    sort_id: The sort ID (e.g., "srt_xxx")
-
-Returns:
-    ViewSortResult with sort details.'''
+    '''Get details of a single sort.'''
     await _call_tool('view_sort_get', {'sort_id': sort_id})
 
 
 @call_tool_app.command(name='view_sort_create')
 async def view_sort_create(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    fk_column_id: Annotated[str, cyclopts.Parameter(help="")],
-    direction: Annotated[str, cyclopts.Parameter(help="")] = 'asc',
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    fk_column_id: Annotated[str, cyclopts.Parameter(help="The column/field ID to sort by (e.g., \"fld_xxx\")")],
+    direction: Annotated[str, cyclopts.Parameter(help="Sort direction - \"asc\" (ascending) or \"desc\" (descending)")] = 'asc',
 ) -> None:
-    '''Create a new sort for a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    fk_column_id: The column/field ID to sort by (e.g., "fld_xxx")
-    direction: Sort direction - "asc" (ascending) or "desc" (descending)
-
-Returns:
-    ViewSortResult with created sort details.'''
+    '''Create a new sort for a view.'''
     await _call_tool('view_sort_create', {'view_id': view_id, 'fk_column_id': fk_column_id, 'direction': direction})
 
 
 @call_tool_app.command(name='view_sort_update')
 async def view_sort_update(
     *,
-    sort_id: Annotated[str, cyclopts.Parameter(help="")],
-    fk_column_id: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    direction: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    sort_id: Annotated[str, cyclopts.Parameter(help="The sort ID (e.g., \"srt_xxx\")")],
+    fk_column_id: Annotated[str | None, cyclopts.Parameter(help="New column/field ID\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New column/field ID\"\n                          }")] = None,
+    direction: Annotated[str | None, cyclopts.Parameter(help="New sort direction - \"asc\" or \"desc\"\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New sort direction - \\\"asc\\\" or \\\"desc\\\"\"\n                          }")] = None,
 ) -> None:
-    '''Update an existing sort.
-
-Args:
-    sort_id: The sort ID (e.g., "srt_xxx")
-    fk_column_id: New column/field ID
-    direction: New sort direction - "asc" or "desc"
-
-Returns:
-    ViewSortResult with updated sort details.'''
+    '''Update an existing sort.'''
     # Parse JSON parameters
     fk_column_id_parsed = json.loads(fk_column_id) if isinstance(fk_column_id, str) else fk_column_id
     direction_parsed = json.loads(direction) if isinstance(direction, str) else direction
@@ -1026,53 +664,31 @@ Returns:
 @call_tool_app.command(name='view_sort_delete')
 async def view_sort_delete(
     *,
-    sort_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    sort_id: Annotated[str, cyclopts.Parameter(help="The sort ID (e.g., \"srt_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
-    '''Delete a sort from a view.
-
-Args:
-    sort_id: The sort ID (e.g., "srt_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    ViewSortDeleteResult with success status.'''
+    '''Delete a sort from a view.'''
     await _call_tool('view_sort_delete', {'sort_id': sort_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='view_columns_list')
 async def view_columns_list(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
 ) -> None:
-    '''List all columns in a view with their visibility settings.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-
-Returns:
-    ViewColumnsListResult with list of columns including show/order settings.'''
+    '''List all columns in a view with their visibility settings.'''
     await _call_tool('view_columns_list', {'view_id': view_id})
 
 
 @call_tool_app.command(name='view_column_update')
 async def view_column_update(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    column_id: Annotated[str, cyclopts.Parameter(help="")],
-    show: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"boolean\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    order: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    column_id: Annotated[str, cyclopts.Parameter(help="The view column ID (from view_columns_list, not the field ID)")],
+    show: Annotated[str | None, cyclopts.Parameter(help="Whether to show (True) or hide (False) the column\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"boolean\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Whether to show (True) or hide (False) the column\"\n                          }")] = None,
+    order: Annotated[str | None, cyclopts.Parameter(help="Column position (0-indexed)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Column position (0-indexed)\"\n                          }")] = None,
 ) -> None:
-    '''Update a column\'s visibility or order in a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    column_id: The view column ID (from view_columns_list, not the field ID)
-    show: Whether to show (True) or hide (False) the column
-    order: Column position (0-indexed)
-
-Returns:
-    ViewColumnResult with updated column settings.'''
+    '''Update a column\'s visibility or order in a view.'''
     # Parse JSON parameters
     show_parsed = json.loads(show) if isinstance(show, str) else show
     order_parsed = json.loads(order) if isinstance(order, str) else order
@@ -1083,68 +699,41 @@ Returns:
 @call_tool_app.command(name='view_columns_hide_all')
 async def view_columns_hide_all(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
 ) -> None:
     '''Hide all columns in a view.
 
-Useful for starting fresh and then selectively showing specific columns.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-
-Returns:
-    ViewColumnsListResult with updated column visibility.'''
+Useful for starting fresh and then selectively showing specific columns.'''
     await _call_tool('view_columns_hide_all', {'view_id': view_id})
 
 
 @call_tool_app.command(name='view_columns_show_all')
 async def view_columns_show_all(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
 ) -> None:
-    '''Show all columns in a view.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-
-Returns:
-    ViewColumnsListResult with updated column visibility.'''
+    '''Show all columns in a view.'''
     await _call_tool('view_columns_show_all', {'view_id': view_id})
 
 
 @call_tool_app.command(name='shared_views_list')
 async def shared_views_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
-    '''List all shared (public) views for a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    SharedViewsListResult with list of shared views.'''
+    '''List all shared (public) views for a table.'''
     await _call_tool('shared_views_list', {'table_id': table_id})
 
 
 @call_tool_app.command(name='shared_view_create')
 async def shared_view_create(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    password: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    password: Annotated[str | None, cyclopts.Parameter(help="Optional password to protect the shared view\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional password to protect the shared view\"\n                          }")] = None,
 ) -> None:
     '''Create a public link for a view.
 
-This makes the view accessible via a unique URL without authentication.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    password: Optional password to protect the shared view
-
-Returns:
-    SharedViewResult with the UUID for the public URL.
-
-Note: The full public URL will be: {nocodb_url}/shared/{uuid}'''
+This makes the view accessible via a unique URL without authentication.'''
     # Parse JSON parameters
     password_parsed = json.loads(password) if isinstance(password, str) else password
 
@@ -1154,17 +743,10 @@ Note: The full public URL will be: {nocodb_url}/shared/{uuid}'''
 @call_tool_app.command(name='shared_view_update')
 async def shared_view_update(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    password: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    password: Annotated[str | None, cyclopts.Parameter(help="New password (or None to remove password protection)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"New password (or None to remove password protection)\"\n                          }")] = None,
 ) -> None:
-    '''Update a shared view\'s settings.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    password: New password (or None to remove password protection)
-
-Returns:
-    SharedViewResult with updated settings.'''
+    '''Update a shared view\'s settings.'''
     # Parse JSON parameters
     password_parsed = json.loads(password) if isinstance(password, str) else password
 
@@ -1174,142 +756,79 @@ Returns:
 @call_tool_app.command(name='shared_view_delete')
 async def shared_view_delete(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with removal")] = False,
 ) -> None:
     '''Remove public access from a view.
 
-The public link will no longer work. The view itself is not deleted.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    confirm: Must be True to proceed with removal
-
-Returns:
-    SharedViewDeleteResult with success status.'''
+The public link will no longer work. The view itself is not deleted.'''
     await _call_tool('shared_view_delete', {'view_id': view_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='webhooks_list')
 async def webhooks_list(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
-    '''List all webhooks for a table.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    WebhooksListResult with list of webhooks.'''
+    '''List all webhooks for a table.'''
     await _call_tool('webhooks_list', {'table_id': table_id})
 
 
 @call_tool_app.command(name='webhook_delete')
 async def webhook_delete(
     *,
-    hook_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    hook_id: Annotated[str, cyclopts.Parameter(help="The webhook ID (e.g., \"hk_xxx\")")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with deletion")] = False,
 ) -> None:
-    '''Delete a webhook.
-
-Args:
-    hook_id: The webhook ID (e.g., "hk_xxx")
-    confirm: Must be True to proceed with deletion
-
-Returns:
-    WebhookDeleteResult with success status.'''
+    '''Delete a webhook.'''
     await _call_tool('webhook_delete', {'hook_id': hook_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='webhook_logs')
 async def webhook_logs(
     *,
-    hook_id: Annotated[str, cyclopts.Parameter(help="")],
+    hook_id: Annotated[str, cyclopts.Parameter(help="The webhook ID (e.g., \"hk_xxx\")")],
 ) -> None:
     '''View execution logs for a webhook.
 
-Useful for debugging webhook delivery issues.
-
-Args:
-    hook_id: The webhook ID (e.g., "hk_xxx")
-
-Returns:
-    WebhookLogsResult with list of execution logs.'''
+Useful for debugging webhook delivery issues.'''
     await _call_tool('webhook_logs', {'hook_id': hook_id})
 
 
 @call_tool_app.command(name='webhook_sample_payload')
 async def webhook_sample_payload(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    event: Annotated[str, cyclopts.Parameter(help="")] = 'records',
-    operation: Annotated[str, cyclopts.Parameter(help="")] = 'insert',
-    version: Annotated[str, cyclopts.Parameter(help="")] = 'v2',
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    event: Annotated[str, cyclopts.Parameter(help="Event type - \"records\" (most common)")] = 'records',
+    operation: Annotated[str, cyclopts.Parameter(help="Operation type - \"insert\", \"update\", \"delete\"")] = 'insert',
+    version: Annotated[str, cyclopts.Parameter(help="Payload version - \"v1\" or \"v2\" (default: \"v2\")")] = 'v2',
 ) -> None:
-    '''Get a sample webhook payload for testing.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    event: Event type - "records" (most common)
-    operation: Operation type - "insert", "update", "delete"
-    version: Payload version - "v1" or "v2" (default: "v2")
-
-Returns:
-    WebhookSamplePayloadResult with sample payload structure.
-
-Example payload structure:
-    {
-        "event": "records",
-        "operation": "insert",
-        "row": {...},  # The affected record
-        "table": {...},  # Table metadata
-        ...
-    }'''
+    '''Get a sample webhook payload for testing.'''
     await _call_tool('webhook_sample_payload', {'table_id': table_id, 'event': event, 'operation': operation, 'version': version})
 
 
 @call_tool_app.command(name='webhook_filters_list')
 async def webhook_filters_list(
     *,
-    hook_id: Annotated[str, cyclopts.Parameter(help="")],
+    hook_id: Annotated[str, cyclopts.Parameter(help="The webhook ID (e.g., \"hk_xxx\")")],
 ) -> None:
     '''List filters for a webhook.
 
-Webhook filters determine when the webhook triggers based on field values.
-
-Args:
-    hook_id: The webhook ID (e.g., "hk_xxx")
-
-Returns:
-    WebhookFiltersListResult with list of filters.'''
+Webhook filters determine when the webhook triggers based on field values.'''
     await _call_tool('webhook_filters_list', {'hook_id': hook_id})
 
 
 @call_tool_app.command(name='webhook_filter_create')
 async def webhook_filter_create(
     *,
-    hook_id: Annotated[str, cyclopts.Parameter(help="")],
-    fk_column_id: Annotated[str, cyclopts.Parameter(help="")],
-    comparison_op: Annotated[str, cyclopts.Parameter(help="")],
-    value: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\"\n                          }")] = None,
+    hook_id: Annotated[str, cyclopts.Parameter(help="The webhook ID (e.g., \"hk_xxx\")")],
+    fk_column_id: Annotated[str, cyclopts.Parameter(help="The column/field ID to filter on")],
+    comparison_op: Annotated[str, cyclopts.Parameter(help="The comparison operator (eq, neq, like, etc.)")],
+    value: Annotated[str | None, cyclopts.Parameter(help="The filter value\\nJSON Schema: {\n                            \"default\": null,\n                            \"title\": \"Value\",\n                            \"description\": \"The filter value\"\n                          }")] = None,
 ) -> None:
     '''Create a filter for a webhook.
 
-Filters control when the webhook fires based on field values.
-
-Args:
-    hook_id: The webhook ID (e.g., "hk_xxx")
-    fk_column_id: The column/field ID to filter on
-    comparison_op: The comparison operator (eq, neq, like, etc.)
-    value: The filter value
-
-Returns:
-    WebhookFilterResult with created filter details.
-
-Example:
-    # Only trigger webhook when Status is "Completed"
-    webhook_filter_create("hk_xxx", "fld_status", "eq", "Completed")'''
+Filters control when the webhook fires based on field values.'''
     # Parse JSON parameters
     value_parsed = json.loads(value) if isinstance(value, str) else value
 
@@ -1329,134 +848,63 @@ Returns:
 @call_tool_app.command(name='member_add')
 async def member_add(
     *,
-    email: Annotated[str, cyclopts.Parameter(help="")],
-    role: Annotated[str, cyclopts.Parameter(help="")] = 'editor',
+    email: Annotated[str, cyclopts.Parameter(help="The user's email address")],
+    role: Annotated[str, cyclopts.Parameter(help="The role to assign. Options:\n- owner: Full control\n- creator: Can create tables\n- editor: Can edit records\n- commenter: Can comment only\n- viewer: Read-only access")] = 'editor',
 ) -> None:
-    '''Add a new member to the current base.
-
-Args:
-    email: The user\'s email address
-    role: The role to assign. Options:
-        - owner: Full control
-        - creator: Can create tables
-        - editor: Can edit records
-        - commenter: Can comment only
-        - viewer: Read-only access
-
-Returns:
-    MemberResult with the added member details.'''
+    '''Add a new member to the current base.'''
     await _call_tool('member_add', {'email': email, 'role': role})
 
 
 @call_tool_app.command(name='member_update')
 async def member_update(
     *,
-    member_id: Annotated[str, cyclopts.Parameter(help="")],
-    role: Annotated[str, cyclopts.Parameter(help="")],
+    member_id: Annotated[str, cyclopts.Parameter(help="The member ID")],
+    role: Annotated[str, cyclopts.Parameter(help="The new role. Options:\n- owner: Full control\n- creator: Can create tables\n- editor: Can edit records\n- commenter: Can comment only\n- viewer: Read-only access")],
 ) -> None:
-    '''Update a member\'s role.
-
-Args:
-    member_id: The member ID
-    role: The new role. Options:
-        - owner: Full control
-        - creator: Can create tables
-        - editor: Can edit records
-        - commenter: Can comment only
-        - viewer: Read-only access
-
-Returns:
-    MemberResult with updated member details.'''
+    '''Update a member\'s role.'''
     await _call_tool('member_update', {'member_id': member_id, 'role': role})
 
 
 @call_tool_app.command(name='member_remove')
 async def member_remove(
     *,
-    member_id: Annotated[str, cyclopts.Parameter(help="")],
-    confirm: Annotated[bool, cyclopts.Parameter(help="")] = False,
+    member_id: Annotated[str, cyclopts.Parameter(help="The member ID to remove")],
+    confirm: Annotated[bool, cyclopts.Parameter(help="Must be True to proceed with removal")] = False,
 ) -> None:
     '''Remove a member from the base.
 
 The user will lose access to this base but their NocoDB account
-is not affected.
-
-Args:
-    member_id: The member ID to remove
-    confirm: Must be True to proceed with removal
-
-Returns:
-    MemberDeleteResult with success status.'''
+is not affected.'''
     await _call_tool('member_remove', {'member_id': member_id, 'confirm': confirm})
 
 
 @call_tool_app.command(name='attachment_upload')
 async def attachment_upload(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
-    record_id: Annotated[str, cyclopts.Parameter(help="")],
-    field_id: Annotated[str, cyclopts.Parameter(help="")],
-    filename: Annotated[str, cyclopts.Parameter(help="")],
-    content_base64: Annotated[str, cyclopts.Parameter(help="")],
-    content_type: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
+    record_id: Annotated[str, cyclopts.Parameter(help="The record ID to attach the file to")],
+    field_id: Annotated[str, cyclopts.Parameter(help="The Attachment field ID (e.g., \"fld_xxx\")")],
+    filename: Annotated[str, cyclopts.Parameter(help="The filename for the uploaded file (e.g., \"document.pdf\")")],
+    content_base64: Annotated[str, cyclopts.Parameter(help="Base64-encoded file content")],
+    content_type: Annotated[str, cyclopts.Parameter(help="MIME type of the file (e.g., \"application/pdf\", \"image/png\")")],
 ) -> None:
     '''Upload a file attachment to a record\'s Attachment field.
 
-The file content must be provided as base64-encoded data.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-    record_id: The record ID to attach the file to
-    field_id: The Attachment field ID (e.g., "fld_xxx")
-    filename: The filename for the uploaded file (e.g., "document.pdf")
-    content_base64: Base64-encoded file content
-    content_type: MIME type of the file (e.g., "application/pdf", "image/png")
-
-Returns:
-    AttachmentUploadResult with URL and metadata.
-
-Example:
-    # Upload a small text file
-    import base64
-    content = base64.b64encode(b"Hello World").decode()
-    attachment_upload("tbl_xxx", "1", "fld_attach", "hello.txt", content, "text/plain")
-
-Common MIME types:
-    - application/pdf
-    - image/png, image/jpeg, image/gif
-    - text/plain, text/csv
-    - application/json
-    - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (xlsx)'''
+The file content must be provided as base64-encoded data.'''
     await _call_tool('attachment_upload', {'table_id': table_id, 'record_id': record_id, 'field_id': field_id, 'filename': filename, 'content_base64': content_base64, 'content_type': content_type})
 
 
 @call_tool_app.command(name='storage_upload')
 async def storage_upload(
     *,
-    filename: Annotated[str, cyclopts.Parameter(help="")],
-    content_base64: Annotated[str, cyclopts.Parameter(help="")],
-    content_type: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    filename: Annotated[str, cyclopts.Parameter(help="The filename (e.g., \"logo.png\", \"document.pdf\")")],
+    content_base64: Annotated[str, cyclopts.Parameter(help="Base64-encoded file content")],
+    content_type: Annotated[str | None, cyclopts.Parameter(help="Optional MIME type (auto-detected if not provided)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"string\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Optional MIME type (auto-detected if not provided)\"\n                          }")] = None,
 ) -> None:
     '''Upload a file to NocoDB general storage.
 
 This uploads a file to storage without attaching it to a specific record.
-Useful for assets that need to be referenced across multiple records.
-
-Args:
-    filename: The filename (e.g., "logo.png", "document.pdf")
-    content_base64: Base64-encoded file content
-    content_type: Optional MIME type (auto-detected if not provided)
-
-Returns:
-    StorageUploadResult with URL and metadata.
-
-For attaching files to specific record fields, use attachment_upload instead.
-
-Common MIME types:
-    - application/pdf
-    - image/png, image/jpeg, image/gif
-    - text/plain, text/csv
-    - application/json'''
+Useful for assets that need to be referenced across multiple records.'''
     # Parse JSON parameters
     content_type_parsed = json.loads(content_type) if isinstance(content_type, str) else content_type
 
@@ -1466,29 +914,11 @@ Common MIME types:
 @call_tool_app.command(name='export_csv')
 async def export_csv(
     *,
-    view_id: Annotated[str, cyclopts.Parameter(help="")],
-    offset: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
-    limit: Annotated[str | None, cyclopts.Parameter(help="JSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null\n                          }")] = None,
+    view_id: Annotated[str, cyclopts.Parameter(help="The view ID (e.g., \"vw_xxx\")")],
+    offset: Annotated[str | None, cyclopts.Parameter(help="Row offset for pagination (skip first N rows)\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Row offset for pagination (skip first N rows)\"\n                          }")] = None,
+    limit: Annotated[str | None, cyclopts.Parameter(help="Maximum number of rows to export\\nJSON Schema: {\n                            \"anyOf\": [\n                              {\n                                \"type\": \"integer\"\n                              },\n                              {\n                                \"type\": \"null\"\n                              }\n                            ],\n                            \"default\": null,\n                            \"description\": \"Maximum number of rows to export\"\n                          }")] = None,
 ) -> None:
-    '''Export a view\'s data as CSV.
-
-Args:
-    view_id: The view ID (e.g., "vw_xxx")
-    offset: Row offset for pagination (skip first N rows)
-    limit: Maximum number of rows to export
-
-Returns:
-    ExportResult with CSV content as a string.
-
-Note: For large datasets, use offset and limit for pagination
-to avoid timeouts.
-
-Example:
-    # Export first 100 rows
-    export_csv("vw_xxx", limit=100)
-
-    # Export rows 101-200
-    export_csv("vw_xxx", offset=100, limit=100)'''
+    '''Export a view\'s data as CSV.'''
     # Parse JSON parameters
     offset_parsed = json.loads(offset) if isinstance(offset, str) else offset
     limit_parsed = json.loads(limit) if isinstance(limit, str) else limit
@@ -1499,29 +929,12 @@ Example:
 @call_tool_app.command(name='schema_export_table')
 async def schema_export_table(
     *,
-    table_id: Annotated[str, cyclopts.Parameter(help="")],
+    table_id: Annotated[str, cyclopts.Parameter(help="The table ID (e.g., \"tbl_xxx\")")],
 ) -> None:
     '''Export portable schema for a single table.
 
 Returns a clean schema with system fields and internal IDs removed,
-suitable for documentation or recreating the table structure.
-
-Args:
-    table_id: The table ID (e.g., "tbl_xxx")
-
-Returns:
-    TableSchemaResult with title and fields array.
-    Each field contains type, title, and field-specific options.
-
-Example output:
-    {
-        "title": "Users",
-        "fields": [
-            {"title": "Name", "type": "SingleLineText"},
-            {"title": "Email", "type": "Email"},
-            {"title": "Status", "type": "SingleSelect", "colOptions": {...}}
-        ]
-    }'''
+suitable for documentation or recreating the table structure.'''
     await _call_tool('schema_export_table', {'table_id': table_id})
 
 
@@ -1555,44 +968,30 @@ Example output:
     await _call_tool('schema_export_base', {})
 
 
-@call_tool_app.command(name='get_workflow_guide')
-async def get_workflow_guide(
+@call_tool_app.command(name='list_resources')
+async def list_resources(
 ) -> None:
-    '''Get the NocoDB workflow guide - CRITICAL rules for schema discovery.
+    '''List all available resources and resource templates.
 
-IMPORTANT: This is internal documentation for your reference only.
-Do NOT paste this content into the chat. Read it, internalize the rules,
-and apply them silently. Only mention specific rules if the user asks.
-
-Call this BEFORE your first NocoDB query to learn the required workflow:
-1. tables_list -> Get table IDs
-2. fields_list(table_id) -> REQUIRED before sort/where
-3. records_list(...) -> Query using actual field names
-
-Returns:
-    Markdown guide with workflow rules (for internal use).'''
-    await _call_tool('get_workflow_guide', {})
+Returns JSON with resource metadata. Static resources have a
+\'uri\' field, while templates have a \'uri_template\' field with
+placeholders like {name}.'''
+    await _call_tool('list_resources', {})
 
 
-@call_tool_app.command(name='get_reference')
-async def get_reference(
+@call_tool_app.command(name='read_resource')
+async def read_resource(
+    *,
+    uri: Annotated[str, cyclopts.Parameter(help="The URI of the resource to read")],
 ) -> None:
-    '''Get the complete NocoDB MCP reference documentation.
+    '''Read a resource by its URI.
 
-IMPORTANT: This is internal documentation for your reference only.
-Do NOT paste this content into the chat. Use it to look up syntax,
-field types, or tool parameters when needed. Only share specific
-details if the user explicitly asks.
+For static resources, provide the exact URI. For templated
+resources, provide the URI with template parameters filled in.
 
-Contains:
-- Tool descriptions by category
-- Field type reference with options
-- Filter syntax guide
-- Common workflow examples
-
-Returns:
-    Full markdown reference (for internal use).'''
-    await _call_tool('get_reference', {})
+Returns the resource content as a string. Binary content is
+base64-encoded.'''
+    await _call_tool('read_resource', {'uri': uri})
 
 
 if __name__ == "__main__":

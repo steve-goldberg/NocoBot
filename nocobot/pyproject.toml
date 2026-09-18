@@ -19,11 +19,12 @@ classifiers = [
 dependencies = [
     "python-telegram-bot[socks]>=21.0",
     "litellm>=1.0.0,<1.82.7",
-    "mcp>=1.0.0",
+    # Floor is the tested version, capped below the next major: an unbounded
+    # mcp>=1.0.0 here is what broke the bot when the SDK went to 2.x.
+    "fastmcp>=4.0.5,<5",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "loguru>=0.7.0",
-    "httpx>=0.25.0",
     "Pillow>=10.0.0",
 ]
 

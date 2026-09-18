@@ -1,4 +1,4 @@
-"""MCP client for connecting to NocoDB MCP server via HTTP streamable transport."""
+"""MCP client for connecting to the NocoDB MCP server via fastmcp's Client."""
 
 from __future__ import annotations
 
@@ -6,14 +6,17 @@ import asyncio
 from contextlib import AsyncExitStack
 from typing import Any
 
+from fastmcp import Client
 from loguru import logger
-from mcp import ClientSession
-from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+
+# Read timeout for the long-lived MCP stream. Left to default, the transport
+# falls back to a 300s read timeout, which silently drops the stream on an idle
+# bot — reconnect churn with no error at the call site.
+SESSION_TIMEOUT = 3600
 
 
 class MCPClient:
-    """Client for NocoDB MCP server using HTTP streamable transport.
+    """Client for the NocoDB MCP server, built on fastmcp's own Client.
 
     Maintains a persistent MCP session via AsyncExitStack, reconnecting
     lazily if the session dies (e.g. server restart).
@@ -29,52 +32,47 @@ class MCPClient:
         """
         self.url = url
         self._tool_timeout = tool_timeout
-        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+        self._api_key = api_key
         self._stack: AsyncExitStack | None = None
-        self._session: ClientSession | None = None
+        self._client: Client | None = None
         self._connected: bool = False
         self._lock = asyncio.Lock()
         self._tools: list[dict[str, Any]] = []
         self._resources: dict[str, str] = {}
 
-    @property
-    def _is_sse(self) -> bool:
-        """Whether the URL indicates SSE transport."""
-        return self.url.rstrip("/").endswith("/sse")
+    def _build_client(self) -> Client:
+        """Create a Client for the configured URL.
 
-    def _open_transport(self):
-        """Create the appropriate transport context manager."""
-        if self._is_sse:
-            return sse_client(self.url, headers=self._headers, timeout=3600)
-        return streamablehttp_client(self.url, headers=self._headers, timeout=3600)
+        Transport is inferred from the URL — ``/mcp`` gives Streamable HTTP and
+        ``/sse`` gives SSE — and ``auth`` is formatted into the
+        ``Authorization: Bearer`` header for us.
+        """
+        return Client(self.url, auth=self._api_key, timeout=SESSION_TIMEOUT)
 
-    async def _ensure_session(self) -> ClientSession:
-        """Return the persistent session, reconnecting and re-discovering tools if needed."""
-        if self._session is not None and self._connected:
-            return self._session
+    async def _ensure_session(self) -> Client:
+        """Return the persistent client, reconnecting and re-discovering tools if needed."""
+        if self._client is not None and self._connected:
+            return self._client
         async with self._lock:
             # Double-check after acquiring lock
-            if self._session is not None and self._connected:
-                return self._session
+            if self._client is not None and self._connected:
+                return self._client
             reconnecting = self._tools != []  # Had tools before → reconnect
             await self._close()
             stack = AsyncExitStack()
             await stack.__aenter__()
             try:
-                transport = await stack.enter_async_context(self._open_transport())
-                read, write = transport[0], transport[1]
-                session = await stack.enter_async_context(ClientSession(read, write))
-                await session.initialize()
+                client = await stack.enter_async_context(self._build_client())
             except BaseException:
                 await stack.aclose()
                 raise
             self._stack = stack
-            self._session = session
+            self._client = client
             self._connected = True
             logger.info("MCP session established to {}", self.url)
             if reconnecting:
-                await self._discover(session)
-            return session
+                await self._discover(client)
+            return client
 
     async def _close(self) -> None:
         """Tear down the current session and stack."""
@@ -84,42 +82,42 @@ class MCPClient:
             except (RuntimeError, BaseExceptionGroup):
                 pass  # MCP SDK cancel scope cleanup noise
             self._stack = None
-        self._session = None
+        self._client = None
         self._connected = False
 
     async def close(self) -> None:
         """Public cleanup — call during bot shutdown."""
         await self._close()
 
-    async def _discover(self, session: ClientSession) -> None:
+    async def _discover(self, client: Client) -> None:
         """Discover and cache tools and resources from the MCP server."""
-        tools_result = await session.list_tools()
+        tools = await client.list_tools()
         self._tools = [
             {
                 "type": "function",
                 "function": {
                     "name": tool.name,
                     "description": tool.description or "",
-                    "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
+                    "parameters": tool.input_schema,
                 }
             }
-            for tool in tools_result.tools
+            for tool in tools
         ]
         logger.info("Discovered {} MCP tools", len(self._tools))
 
-        resources_result = await session.list_resources()
+        resources = await client.list_resources()
         self._resources = {}
-        for resource in resources_result.resources:
-            content = await session.read_resource(resource.uri)
-            if content.contents:
-                self._resources[str(resource.uri)] = content.contents[0].text
+        for resource in resources:
+            contents = await client.read_resource(resource.uri)
+            if contents:
+                self._resources[str(resource.uri)] = contents[0].text
         logger.info("Cached {} MCP resources", len(self._resources))
 
     async def connect(self) -> None:
         """Connect to the MCP server and discover tools/resources."""
         logger.info("Connecting to MCP server at {}...", self.url)
-        session = await self._ensure_session()
-        await self._discover(session)
+        client = await self._ensure_session()
+        await self._discover(client)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Call an MCP tool.
@@ -132,9 +130,12 @@ class MCPClient:
             Tool result as string
         """
         try:
-            session = await self._ensure_session()
+            client = await self._ensure_session()
+            # raise_on_error=False keeps a failing tool as a returned result, so
+            # the error text below still reaches the log. Left to default, it
+            # would raise and be swallowed by the generic handler.
             result = await asyncio.wait_for(
-                session.call_tool(name, arguments),
+                client.call_tool(name, arguments, raise_on_error=False),
                 timeout=self._tool_timeout,
             )
         except asyncio.TimeoutError:
@@ -159,7 +160,7 @@ class MCPClient:
             texts = [c.text for c in result.content if hasattr(c, 'text')]
             text = "\n".join(texts)
 
-        if result.isError:
+        if result.is_error:
             logger.warning("MCP tool '{}' returned error: {}", name, text)
             return "Tool returned an error. Please try a different approach."
 
@@ -215,7 +216,7 @@ class MCPClient:
             "",
             "## Reference Tools (call on-demand via read_resource)",
             "- `nocodb://schema-discovery-rules` — CALL FIRST before any query",
-            "- `nocodb://tools-reference` — All 62 tools, field types, filter syntax",
+            "- `nocodb://tools-reference` — Tool reference by category, field types, filter syntax",
             "- `nocodb://formula-reference` — Formula functions and operators",
             "",
             "## Rules",

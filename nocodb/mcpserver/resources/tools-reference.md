@@ -160,6 +160,33 @@ records_list(table_id="tbl_xxx", where="(status,eq,Active)")  # Guessing "status
 
 ---
 
+## File Uploads
+
+Both upload tools take file content as **base64** and a MIME type in `content_type`.
+
+- `attachment_upload` — attaches a file to an Attachment field on a specific record.
+  Requires `table_id`, `record_id`, and `field_id`.
+- `storage_upload` — uploads to general storage, unattached to any record. Use for assets
+  referenced across multiple records. `content_type` is auto-detected if omitted.
+
+### Common MIME types
+
+| Type | `content_type` |
+|------|----------------|
+| PDF | `application/pdf` |
+| Images | `image/png`, `image/jpeg`, `image/gif` |
+| Text | `text/plain`, `text/csv` |
+| JSON | `application/json` |
+| Excel (xlsx) | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+
+```python
+import base64
+content = base64.b64encode(b"Hello World").decode()
+attachment_upload("tbl_xxx", "1", "fld_attach", "hello.txt", content, "text/plain")
+```
+
+---
+
 ## Filter Syntax
 
 Use in `where` parameter for records_list:

@@ -1,0 +1,78 @@
+name: Tests
+
+# Runs the offline test suite on every push and pull request.
+#
+# Before this workflow existed nothing ran these tests automatically, which is
+# how an unbounded `fastmcp>=3.0.2` sat in nocodb/setup.py long enough that a
+# rebuild would have shipped an untested major version to production. See
+# nocodb/docs/upgrade/FASTMCP4-UPGRADE-REPORT.md section 8.
+#
+# NOCODB_RUN_INTEGRATION is deliberately never set here, and this repo has no
+# NocoDB credentials as secrets. The 57 live-integration tests it gates create
+# and delete a real base on a real instance. They are also absent from CI
+# entirely: tests/ is gitignored (.gitignore:15), so a fresh clone does not
+# contain them. CI therefore reports 174 passed and 0 skipped, where a local
+# working tree reports 174 passed and 57 skipped.
+
+on:
+  push:
+  pull_request:
+  # Manual trigger. Registering this repo's first-ever workflow took GitHub
+  # about seven minutes, during which pushes produced no runs at all and there
+  # was no way to ask for one. A dispatch button turns that class of problem
+  # into something you can poke rather than diagnose. The button appears in the
+  # UI once this file reaches the default branch.
+  workflow_dispatch:
+
+# A superseded run has nothing left to tell us. Push and pull_request events
+# get distinct refs, so both still run for a branch with an open PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # 3.12 matches nocodb/Dockerfile and nocobot/Dockerfile. Test the
+      # interpreter that is actually shipped, not the one that happens to be
+      # in a contributor's venv.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          # setup-python's pip cache searches for requirements.txt by default
+          # and fails the step when it finds none. This repo declares its
+          # dependencies in these two files instead.
+          cache-dependency-path: |
+            nocodb/setup.py
+            nocobot/pyproject.toml
+
+      # No lock file, so pip re-resolves every specifier on every run. That
+      # makes this step the dependency-pin check: if a pin stops resolving,
+      # install fails here rather than at the next production rebuild.
+      #
+      # nocodb's `test` extra is deliberately not part of `all` -- the
+      # Dockerfile installs .[mcp], and test deps must never reach an image.
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "nocodb/[test]"
+          pip install -e "nocobot/[dev]"
+
+      # Invoked from the repo root: the root conftest.py puts the repo root on
+      # sys.path, which is what makes `import nocobot` resolve. The editable
+      # install of nocobot supplies its dependencies but maps no modules --
+      # its pyproject sets packages = ["nocobot"] while sitting inside the
+      # package directory, so hatchling looks for a nonexistent
+      # nocobot/nocobot. That is a known packaging bug, tracked separately;
+      # production is unaffected because nocobot/Dockerfile rebuilds the
+      # hierarchy at COPY time.
+      - name: Run tests
+        run: python -m pytest -q

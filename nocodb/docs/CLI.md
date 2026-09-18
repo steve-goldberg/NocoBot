@@ -1,6 +1,41 @@
 # Command-Line Interface
 
-Auto-generated CLI via `fastmcp generate-cli` with 62 commands mirroring the MCP server tools.
+Auto-generated CLI via `fastmcp generate-cli` with 62 `call-tool` commands — one per tool the MCP
+server exposes (60 `@mcp.tool` functions + `list_resources` and `read_resource` from the
+`ResourcesAsTools` transform).
+
+Regenerate with `nocodb/scripts/regenerate-cli.sh`. The script fails non-zero if any
+post-processing substitution stops matching, or if the emitted command names stop matching the
+server's tool names exactly. **Do not hand-edit `cli/generated.py` or `cli/skill.md`** — both are
+build output, and hand-patching them hides generator or server drift instead of surfacing it.
+
+### Where tool documentation lives
+
+FastMCP parses tool docstrings and uses **only the free-form text above `Args:`** as the tool
+description. `Returns:`, `Raises:`, and `Example:` sections are deliberately excluded from the
+description and instead feed the schema — this is documented framework behaviour, not a defect.
+Since FastMCP 3.4.7 the parser also populates per-parameter descriptions, which is why the flag
+tables in `cli/skill.md` carry real text where they were previously blank.
+
+The consequence is that documentation has three homes, and each piece belongs in exactly one:
+
+| What | Where it lives |
+|------|----------------|
+| One-line summary of a tool | Docstring text above `Args:` |
+| Per-parameter meaning | Docstring `Args:` entries → parameter descriptions |
+| Return shape | `outputSchema`, derived from the dataclass return annotation |
+| Operators, field types, MIME types, worked examples | `mcpserver/resources/tools-reference.md` |
+
+`cli/skill.md` shrank from 39044 to 28211 bytes when the parser changed, because the raw
+`Returns:` and trailing prose stopped being echoed into it. That content was not lost: return
+shapes are carried more precisely by `outputSchema`, and the extended guidance lives in the
+resources above. **Do not restore it by post-processing** — that fights the parser, duplicates
+`outputSchema` in a weaker form, and re-bloats every tool description on every request.
+
+If a specific tool genuinely needs prose in its description, the supported knob is
+`@mcp.tool(description=...)`, which overrides the description while keeping docstring-derived
+parameter descriptions. Use it sparingly: tool descriptions are always in context, whereas
+resources are only read on request.
 
 ## Installation
 

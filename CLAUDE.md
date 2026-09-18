@@ -10,18 +10,40 @@ NocoBot monorepo — Telegram bot with NocoDB MCP agent, plus the bundled Python
 2. **nocobot/** - Telegram bot with NocoDB MCP agent integration
 
 **Dokploy Deployment:**
-- MCP Server: Build Path = `/nocodb/`
-- Telegram Bot: Build Path = `/nocobot/`
+
+This is a monorepo, so **Build Path stays at `/`** while the Docker File and Context Path point into
+the subdirectory. These are three separate Dokploy fields — do not collapse them:
+
+| Field | MCP Server | Telegram Bot |
+|---|---|---|
+| Build Path | `/` | `/` |
+| Docker File | `nocodb/Dockerfile` | `nocobot/Dockerfile` |
+| Docker Context Path | `nocodb` | `nocobot` |
+
+The context path is not cosmetic. `nocodb/setup.py:20-28` maps packages relative to `nocodb/` and
+`:38` reads `README.md` from it; `nocobot/Dockerfile:10-14` rebuilds the package hierarchy on the
+assumption that the context is `nocobot/`. Both images fail to build from the repo root.
+
+Branch and trigger are configured per-app in Dokploy (Provider tab). If a deploy appears to succeed
+but nothing changes, check the app is pointed at a branch that still exists on the remote.
+
+See `nocodb/docs/DEPLOY_MCP.md` for full deployment steps.
 
 ### nocodb SDK
 
-**Status:** v3.1.0 - Feature complete (123 tests)
+**Status:** v3.1.0 - Feature complete (123 SDK tests in `infra/` + `filters/`, plus 13 MCP server tests)
+
+Repo-wide the suite collects **231**: 174 run offline (123 SDK + 13 MCP server + 38 nocobot), and 57
+live-integration tests under `tests/` stay skipped unless `NOCODB_RUN_INTEGRATION=1` is set. Never
+set that flag casually — those 57 create and delete a real base on the configured instance, and
+`tests/test_integration_full.py` calls `load_dotenv()` itself, so `env -u NOCODB_URL` will **not**
+protect you.
 
 This client uses a hybrid v2/v3 API approach based on what's available in self-hosted NocoDB:
 - **v3 Data API** - Records CRUD, links, attachments, button actions
 - **v3 Meta API** - Tables, fields, base CRUD, base members
 - **v2 Meta API** - List bases, views (list/update/delete only), view filters/sorts, webhooks (list/delete only)
-- **CLI** - Auto-generated CLI via FastMCP (60 commands from MCP server)
+- **CLI** - Auto-generated CLI via FastMCP (62 commands, one per exposed MCP tool)
 
 Use `/nocodbv3` skill for NocoDB API documentation when implementing features.
 
@@ -105,9 +127,9 @@ nocobot/                          # Monorepo root
 │   │   ├── main.py               # Entry point, handles `init` command
 │   │   ├── config.py             # Config file (~/.nocodbrc) and env handling
 │   │   ├── wrapper.py            # Config injection, command aliases
-│   │   ├── generated.py          # Auto-generated CLI (60 commands)
+│   │   ├── generated.py          # Auto-generated CLI (62 commands)
 │   │   └── skill.md              # Agent skill documentation
-│   ├── mcpserver/                # MCP Server (FastMCP 3.0)
+│   ├── mcpserver/                # MCP Server (FastMCP 4.x)
 │   │   ├── __init__.py           # Package exports
 │   │   ├── __main__.py           # Entry point for `python -m nocodb.mcpserver`
 │   │   ├── server.py             # FastMCP server with lifespan
@@ -115,7 +137,7 @@ nocobot/                          # Monorepo root
 │   │   ├── errors.py             # ToolError wrapper
 │   │   ├── models.py             # Response dataclasses
 │   │   ├── resources/            # MCP resources (3 markdown files + __init__.py)
-│   │   └── tools/                # 16 tool modules (60 tools total)
+│   │   └── tools/                # 16 tool modules (60 @mcp.tool functions)
 │   │       ├── records.py, bases.py, tables.py, fields.py
 │   │       ├── links.py, views.py, view_filters.py, view_sorts.py
 │   │       ├── view_columns.py, shared_views.py, webhooks.py
@@ -194,7 +216,7 @@ nocobot/                          # Monorepo root
   - `main.py` - Entry point, handles `init` command only
   - `config.py` - Config file loading (~/.nocodbrc), env vars (NOCODB_URL, NOCODB_TOKEN)
   - `wrapper.py` - Config injection, command aliases (`records list` → `call-tool records_list`), param mapping
-  - `generated.py` - Auto-generated from MCP server (60 tool commands), regenerate with `nocodb/scripts/regenerate-cli.sh`
+  - `generated.py` - Auto-generated from MCP server (62 tool commands, one per exposed tool), regenerate with `nocodb/scripts/regenerate-cli.sh`
 
 - `nocodb/filters/` - Query filter system
   - `__init__.py` - Filter classes: `EqFilter`, `LikeFilter`, `IsFilter`, `InFilter`, `BetweenFilter`
@@ -202,13 +224,16 @@ nocobot/                          # Monorepo root
   - `factory.py` - `basic_filter_class_factory()` for creating custom filters
   - `raw_filter.py` - `RawFilter` for custom filter strings
 
-- `nocodb/mcpserver/` - MCP Server (FastMCP 3.0)
-  - `server.py` - FastMCP server with 60 tools + 3 resources + `/health` endpoint
+- `nocodb/mcpserver/` - MCP Server (FastMCP 4.x)
+  - `server.py` - FastMCP server with 60 `@mcp.tool` functions + 3 resources + `/health` endpoint.
+    `ResourcesAsTools` adds exactly **2** more tools (`list_resources`, `read_resource`) regardless
+    of resource count, so `list_tools()` returns **62**. The 3 resources are reached *through*
+    `read_resource`, not exposed individually.
   - `dependencies.py` - Environment-based config (NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID, NOCODB_VERIFY_SSL, MCP_API_KEY)
   - `resources/` - MCP resources package: `schema-discovery-rules.md`, `tools-reference.md`, `formula-reference.md` (exposed via ResourcesAsTools transform)
   - `tools/` - 16 tool modules for records, bases, tables, fields, views, webhooks, schema export, etc.
   - Supports both stdio (local) and HTTP (remote deployment) transports
-  - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 3.0)
+  - HTTP transport uses Streamable HTTP at `/mcp` endpoint (FastMCP 4.x)
   - Optional API key auth via `MCP_API_KEY` env var (HTTP only)
   - See `nocodb/docs/DEPLOY_MCP.md` for Docker/Dokploy deployment
 
