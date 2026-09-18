@@ -32,6 +32,12 @@ Fetched 2026-09-17, byte-verified against the llmshub registry.
 |---|---|---|
 | `nocodb/docs/fastmcp.txt` | 63 KB | Index of every doc page. Safe to read whole. |
 | `nocodb/docs/fastmcp-full.txt` | 2.8 MB, 1276 sections | **GREP ONLY — never read whole.** ~721k tokens. |
+| `nocodb/docs/mcp-sdk.txt` | 4.8 KB | MCP **Python SDK** index (distinct from FastMCP). Safe to read whole. |
+| `nocodb/docs/mcp-sdk-full.txt` | 776 KB, 14370 lines | **GREP ONLY.** Raw SDK docs — v1→v2 transport recipe at `3479-3527`, error lookup at `1440-1458`. |
+
+The two `mcp-sdk*` files were added 2026-09-17 from `https://py.sdk.modelcontextprotocol.io/llms.txt`
+after the nocobot finding (§6.6) showed the FastMCP corpus cannot answer raw-SDK questions. All four
+files are gitignored.
 
 Key line ranges already located in `fastmcp-full.txt`:
 
