@@ -45,17 +45,34 @@ setup(
            # CLI is now auto-generated from MCP server
            # Uses cyclopts (via fastmcp) instead of typer
            # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
-           "fastmcp>=3.0.2,<4",
+           # Floor raised to 3.4.7: the version the cap resolves to, and the
+           # version the test suite is written against.
+           "fastmcp>=3.4.7,<4",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
        "mcp": [
            # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
-           "fastmcp>=3.0.2,<4",
+           # Floor raised to 3.4.7: declared floor == tested version.
+           "fastmcp>=3.4.7,<4",
        ],
        "all": [
            # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
-           "fastmcp>=3.0.2,<4",
+           # Floor raised to 3.4.7: declared floor == tested version.
+           "fastmcp>=3.4.7,<4",
            "tomli>=2.0.0;python_version<'3.11'",
+       ],
+       # Test-only dependencies. Deliberately not folded into "all": the
+       # Dockerfile installs ".[mcp]", and these should never reach an image.
+       # python-dotenv is imported by tests/test_integration_full.py and was
+       # previously undeclared, resolving only because another package
+       # happened to pull it in.
+       "test": [
+           "pytest>=7.0.0",
+           "pytest-asyncio>=0.21.0",
+           "python-dotenv>=1.0.0",
+           # The MCP server tests import fastmcp and drive its ASGI app.
+           "fastmcp>=3.4.7,<4",
+           "httpx>=0.25.0",
        ],
    },
    entry_points={
