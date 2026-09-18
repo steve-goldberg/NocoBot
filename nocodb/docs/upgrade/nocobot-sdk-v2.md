@@ -41,12 +41,29 @@ keyword arguments.** You are deleting the risky code, not rewriting it.
 It also removes the raw-SDK version coupling that caused this whole situation: nocobot stops
 depending on `mcp` directly and depends on `fastmcp`, the same library the server is built on.
 
-### API surface check — already done
+### API surface check — confirmed, but the framing was incomplete
 
 nocobot uses exactly five session calls: `initialize` (`:67`), `list_tools` (`:96`),
 `list_resources` (`:110`), `read_resource` (`:113`), `call_tool` (`:137`). **All are first-class on
-`fastmcp.Client`**, and `auto_initialize=True` covers `initialize`. Architect-verified. There is no
-capability you lose by switching.
+`fastmcp.Client`**, and `auto_initialize=True` covers `initialize`. No capability is lost.
+
+**But "nothing is lost in the swap" undersold the edit.** Three of the five changed **return
+shape** — fastmcp unwraps the protocol result objects:
+
+| Call | Raw SDK returns | `fastmcp.Client` returns | Breaks |
+|---|---|---|---|
+| `list_tools()` | `ListToolsResult` | `list[Tool]` | `:96-97` `tools_result.tools` |
+| `list_resources()` | `ListResourcesResult` | `list[Resource]` | `:110-112` `resources_result.resources` |
+| `read_resource()` | `ReadResourceResult` | `list[TextResourceContents \| Blob]` | `:113-115` `content.contents` |
+
+Verified live against the real server: 62 tools, 3 resources, 1 content item. These are loud
+`AttributeError`s, so the risk is low — but `_discover` is **three unwrap changes plus the field
+renames**, not "two field renames". Scope accordingly.
+
+**Non-issue, checked anyway:** `ResourcesAsTools` only *adds* to `list_tools`; it does not override
+protocol-level `resources/list`. `list_resources()` still returns all 3 `nocodb://` resources, so
+nocobot's resource cache and system prompt are unaffected. Worth stating because CLAUDE.md's
+"not exposed individually" phrasing reads like it might hide them. It doesn't.
 
 ---
 
@@ -90,16 +107,52 @@ capability you lose by switching.
 
 ---
 
-## ⚠️ The timeout trap — still applies
+## ⚠️ The timeout trap — right conclusion, corrected number
 
-`nocobot/mcp_client.py:49` passes **`timeout=3600`** (one hour). If the timeout is not carried onto
-the `Client`, you inherit a default that is far shorter. The raw-SDK docs spell out the equivalent
-failure (`mcp-sdk-full.txt:3523`): v1's transport defaulted to `Timeout(30, read=300)`, while a bare
-`httpx2.AsyncClient()` falls back to a **flat 5 seconds** — too short for the long-lived GET stream.
+**CORRECTED.** An earlier draft cited a **flat 5 seconds** as the cost of omitting the timeout. That
+figure is wrong for the path we are now taking, and the correction matters because the number was
+cited as evidence.
 
-The symptom is not an exception. The bot connects, works briefly, then starts dropping its stream:
-flaky reconnects, no error at the call site, nothing in a health check. **Carry the timeout
-explicitly and assert it in a test.** Same silent-degradation shape as the `:103` `{}` fallback.
+Architect-verified:
+
+| Path | Default if you omit the timeout |
+|---|---|
+| Hand-built bare `httpx2.AsyncClient()` — the **old raw-SDK plan** | `Timeout(5.0)` — the 5s figure was correct *for that plan* |
+| `fastmcp.Client` — **what you are doing** | `httpx2.Timeout(30.0, read=300.0)` (`mcp/shared/_httpx_utils.py:13-14,58`) |
+
+**fastmcp never hands you a bare client**, so 5s does not apply. The real cost of omitting it is a
+**300-second read timeout** against an intended 3600.
+
+**The conclusion is unchanged: carry it and assert it.** A long-lived GET stream that drops after
+five idle minutes produces exactly the symptom described — flaky reconnects, no error at the call
+site, nothing in a health check. It is a real regression, just a less dramatic one than stated.
+
+Confirmed upside: **`Client(timeout=3600)` covers both layers.** `connect_session` builds
+`httpx2.Timeout(30.0, read=3600)` *and* sets the session's `read_timeout_seconds`. Connect, write
+and pool stay at 30s, which is what you want. One kwarg genuinely does it.
+
+---
+
+## ⚠️ `raise_on_error=True` is the default — pass `raise_on_error=False`
+
+**Architect-verified:** `Client.call_tool(..., raise_on_error: bool = True)`.
+
+A failing tool therefore **raises `fastmcp.exceptions.ToolError`** rather than returning a result
+with `is_error=True`. In nocobot that exception lands in the `except Exception` at `:151`, which
+returns a generic *"Tool call failed. Please try a different approach."*
+
+Two consequences, and this is the subtle one in this migration:
+
+1. **The `:162` `is_error` branch becomes dead code.** Renaming it to `is_error` as the scope
+   instructs would leave a correct-looking rename on a line that never executes.
+2. **The `:163` warning that logs the actual server error text stops firing** — the error detail
+   disappears from the logs, replaced by a generic string.
+
+That is a silent behaviour change on the error path: nothing crashes, the bot keeps answering, and
+diagnostics quietly get worse.
+
+**Pass `raise_on_error=False`.** Verified to restore exactly the current semantics — `is_error=True`
+with the error text in `result.content` — keeping `:162` meaningful and preserving the logging.
 
 ---
 
@@ -118,6 +171,21 @@ auth test failing when the auth is wired wrong, then passing when it is right.**
 
 Passing `auth=api_key` is *less* error-prone than the old header dict — but "less error-prone" is
 not "verified", and this is the one path where a silent failure is a security outcome.
+
+### ⚠️ The trap inside the gate
+
+`auth=<str>` becomes a `BearerAuth` that sets the header inside `auth_flow()` at **request time**.
+It is **not** a static header on the client. So an assertion against `client.headers` would **pass
+vacuously and prove nothing** — the exact failure mode this gate exists to prevent, reproduced
+inside the gate itself.
+
+The test must observe a **real outbound request**. Workable approach:
+`fastmcp.utilities.tests.asgi_server(server)` gives a real in-process port, and a probe tool can
+capture what the server actually received via
+`get_http_headers(include={"authorization"})` — **the `include=` is required**, since
+`get_http_headers()` filters auth headers by default.
+
+Then mutate: drop `auth=`, watch that one test go red, restore.
 
 ---
 
