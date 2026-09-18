@@ -31,7 +31,7 @@ See `nocodb/docs/DEPLOY_MCP.md` for full deployment steps.
 
 ### nocodb SDK
 
-**Status:** v3.1.0 - Feature complete (123 SDK tests in `infra/` + `filters/`, plus 13 MCP server tests)
+**Status:** v4.0.0 - Feature complete (123 SDK tests in `infra/` + `filters/`, plus 13 MCP server tests)
 
 Repo-wide the suite collects **231**: 174 run offline (123 SDK + 13 MCP server + 38 nocobot), and 57
 live-integration tests under `tests/` stay skipped unless `NOCODB_RUN_INTEGRATION=1` is set. Never
@@ -111,7 +111,7 @@ python -m nocobot
 ```
 nocobot/                          # Monorepo root
 ├── nocodb/                       # Service 1: NocoDB MCP Server (Dokploy: /nocodb/)
-│   ├── __init__.py               # Package exports, version (3.1.0)
+│   ├── __init__.py               # Package exports, version (4.0.0)
 │   ├── __main__.py               # Entry point for `python -m nocodb`
 │   ├── core.py                   # Core domain models (NocoDBBase, NocoDBClient, WhereFilter)
 │   ├── api.py                    # URI builders (v2/v3)
