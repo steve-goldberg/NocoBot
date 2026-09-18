@@ -21,3 +21,8 @@ docs/tasks/
 .nano-banana/
 *.DS_Store
 nanobot/
+
+# Vendored upstream FastMCP docs - fetched, not source (2.9 MB)
+# Refetch: see nocodb/docs/upgrade/FASTMCP4-UPGRADE-REPORT.md section 1
+nocodb/docs/fastmcp.txt
+nocodb/docs/fastmcp-full.txt
