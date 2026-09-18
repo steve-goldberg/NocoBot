@@ -73,8 +73,8 @@ Required assertions:
 
 | # | Assertion | Why it matters |
 |---|---|---|
-| T1 | Exactly **63** tools are exposed (60 `@mcp.tool` + 3 from `ResourcesAsTools`) | Catches registration breakage and transform regressions. Report §5.1 has per-module counts (records 7, fields 6, view_filters 6, webhooks 6, tables 5, view_sorts 5, members 4, shared_views 4, view_columns 4, links 3, views 3, bases 2, schema 2, attachments 1, export 1, storage 1). |
-| T2 | The 3 resources are reachable **and** surfaced as tools | Report §4 / changelog: `ResourcesAsTools` can degrade silently — server starts clean, just advertises 60 instead of 63. Nothing else would notice. |
+| T1 | **62** tools: 60 tool-derived names **plus exactly** `{list_resources, read_resource}` | **CORRECTED — your finding, approved.** Assert the *structure*, not the integer, exactly as you proposed. Report §5.1 has per-module counts (records 7, fields 6, view_filters 6, webhooks 6, tables 5, view_sorts 5, members 4, shared_views 4, view_columns 4, links 3, views 3, bases 2, schema 2, attachments 1, export 1, storage 1 = 60). |
+| T2 | The 3 resources are reachable **through `read_resource`** | `ResourcesAsTools` can degrade silently — server starts clean and simply stops exposing the pair. Nothing else would notice. |
 | T3 | Every tool has a **non-empty** input schema | This is the exact failure shape of the `nocobot` bug (report §4.1) — an empty `{}` schema is silent and poisons the LLM. |
 | T4 | `/health` returns `{"status":"ok"}` | It is the deploy gate. |
 | T5 | **Auth REJECTS a wrong token** | ← **The single most important test here.** |

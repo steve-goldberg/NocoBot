@@ -82,6 +82,26 @@ Also (report §3.1):
 has removals scheduled (bare-string `Client("server.py")`). Leaving it unbounded rebuilds exactly
 the exposure Phase 0 just closed. State your reasoning either way.
 
+### 3b. Expect the `import fastmcp` ImportError on the bump
+
+**Report §6.2(b).** Upgrading fastmcp in place produces
+`cannot import name 'FastMCP' from 'fastmcp' (unknown location)`. Phase 1 hit this going 3.0.0 →
+3.4.7; it affects any pip upgrade crossing ≥3.3 (`fastmcp-full.txt:38896`) and you will hit it again
+on the 4.x bump.
+
+**This is a packaging artifact, not a migration failure — do not report it as one.** Fix:
+`pip install --force-reinstall fastmcp`. Note `--force-reinstall` without `--no-deps` cascades the
+whole tree; Phase 1 accepted that deliberately (§6.2c) rather than building a hybrid environment.
+Do the same, and **record the full before/after version table** in your report.
+
+### 3c. Refresh `nocobot/uv.lock`
+
+**Report §6.2(c).** Phase 1's cascade moved the venv's `mcp` to **1.30.0** while
+`nocobot/uv.lock` still pins **1.26.0**. Both are SDK v1 (camelCase), so §4.1's analysis holds — but
+you will be fixing and testing the nocobot camelCase reads against 1.30.0 while nocobot's Docker
+build ships 1.26.0. Refresh the lock so the thing you tested is the thing that ships. Do not leave
+that divergence behind you.
+
 ### 4. Add a lockfile and lock the Docker build
 
 This is the durable fix for the exposure that made Phase 0 urgent. Report §2.3 / §2.4.

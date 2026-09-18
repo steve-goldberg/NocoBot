@@ -179,7 +179,7 @@ types to a standalone `mcp_types` package and renamed every model field camelCas
 |---|---|---|---|
 | B1 | camelCase → snake_case on all protocol models | **8 read sites** — see §4 | 32446+, 32557-32580 |
 | B2 | `pydantic>=2.12` is the new floor | venv already at 2.12.5 → OK; must raise declared floor | 32545-32551 |
-| B3 | `starlette>=1.0.1` floor (server extra) | venv has 0.52.1 → resolver will bump it | 32545-32551 |
+| B3 | `starlette>=1.0.1` floor (server extra) | **CORRECTED:** this already happened *under the 3.x cap*. Phase 1's upgrade to fastmcp 3.4.7 pulled starlette 0.52.1 → **1.6.0**. Not a 4.x-only floor. | 32545-32551 |
 | B4 | FastAPI must be ≥0.133.0 to admit Starlette 1.x | **N/A — repo does not use FastAPI** | 32545-32551 |
 | B5 | httpx → httpx2 wholesale | **N/A** — `except httpx.` grep = 0 hits | 32641-32678 |
 
@@ -208,7 +208,7 @@ Confirmed still valid in the v4 docs — **no change required**:
 | `@mcp.tool`, `@mcp.tool(annotations={...})` | 60 sites | Unchanged (32737, 34245) |
 | `@mcp.resource(uri=, name=, description=, mime_type=)` | `resources/__init__.py:27,38,49` | Unchanged |
 | `@asynccontextmanager` lifespan → `FastMCP(lifespan=...)` | `server.py:20-35,50-54` | **Explicitly still supported** (16380-16393) |
-| `ResourcesAsTools` + `mcp.add_transform(...)` | `server.py:13,57` | Unchanged; now the *recommended* path (24019-24123) |
+| `ResourcesAsTools` + `mcp.add_transform(...)` | `server.py:13,57` | Unchanged; now the *recommended* path (24019-24123). **Generates exactly 2 tools** (`list_resources`, `read_resource`), not one per resource — see §4.3 correction |
 | `@mcp.custom_route("/health", methods=["GET"])` | `server.py:63-66` | Still the documented health-check pattern (~5244) |
 | `mcp.run(transport="http", host=, port=)` | `__main__.py:58` | Unchanged (~5080); `path=` still supported (~5123) |
 | `DebugTokenVerifier(validate=, client_id=)` | `server.py:12,41-44` | **Still exists, same signature** (13281-13337, 47757-47776) |
@@ -286,10 +286,32 @@ verify the bridge empirically rather than trusting this.
 
 ### 4.3 `nocodb/cli/generated.py` is STALE — pre-existing, blocks clean signal
 
-- Contains **62** `@call_tool_app.command` entries.
-- Server currently exposes **60** `@mcp.tool` + **3** `ResourcesAsTools`-derived = **63**.
-- Still defines `get_workflow_guide` (`:1558`) and `get_reference` (`:1580`), which came from
+> **CORRECTED 2026-09-17 after Phase 1 challenged this section.** The original text claimed the
+> server exposes 63 tools (60 + "3 `ResourcesAsTools`-derived"). **That was wrong.**
+> `ResourcesAsTools` generates exactly **two** tools — `list_resources` and `read_resource` —
+> regardless of how many resources exist. The 3 resources are reached *through* `read_resource`,
+> not exposed as 3 separate tools. Confirmed three ways: the installed 3.4.7 class docstring
+> ("Generates two tools:"), `fastmcp-full.txt:23899`, and a live in-memory client count.
+> **The correct total is 62 = 60 `@mcp.tool` + 2 transform-derived.**
+
+**The counts match. The name sets do not.** Measured live by the architect against `generated.py`:
+
+```
+generated.py commands: 62
+live server tools    : 62
+
+GHOSTS  (in CLI, not on server): ['get_reference', 'get_workflow_guide']
+MISSING (on server, not in CLI): ['list_resources', 'read_resource']
+```
+
+**This is a trap.** A count-based check (`62 == 62`) passes while the CLI is genuinely broken: it
+exposes two dead commands pointing at a deleted module, and is missing the two commands that reach
+the 3 resources at all. **Phase 2 must compare name sets, never counts.** Any check that asserts a
+number here will report success on a broken artifact.
+
+- The two ghosts are `get_workflow_guide` (`:1558`) and `get_reference` (`:1580`), from
   `nocodb/mcpserver/tools/docs.py` — **a module that has been deleted**.
+- The two missing are the `ResourcesAsTools` pair, absent because the CLI predates that switch.
 - Last regenerated at `c13aa72` (2026-03-11). The `ResourcesAsTools` switch (`09ddf0a`) and the
   formula-resource change (`327954e`) both landed 2026-03-12 **without a regen**.
 - `nocodb/docs/CLI.md:3` still documents "62 commands".
@@ -438,6 +460,61 @@ dependency resolution*.
 Rationale: a test net is only worth what its environment fidelity is worth. Normalising first costs
 minutes; discovering in Phase 3 that the tests were written against 3.0.0 behaviour costs the whole
 upgrade's attribution.
+
+### 6.2 Amendments after Phase 1 step 0 (2026-09-17)
+
+Phase 1 challenged §4.3 and was right. Three corrections, all architect-verified:
+
+**(a) Tool count is 62, not 63.** See the §4.3 correction block. `ResourcesAsTools` makes 2 tools,
+not 3. T1 in `phase-1.md` was wrong and is amended. **Phase 1's proposed fix is approved and
+preferred:** assert the *structure* — 60 tool-derived names plus exactly
+`{list_resources, read_resource}` — rather than a magic number, so the test names what drifted
+instead of just failing an integer comparison. Given that a `62 == 62` count check passes on a
+demonstrably broken CLI (§4.3), magic-number assertions are actively harmful here.
+
+**(b) The `import fastmcp` ImportError is a 3.x problem too.** §4.2 attributed
+`cannot import name 'FastMCP' from 'fastmcp' (unknown location)` to a broken user-site 4.0.3
+install. It actually hits **any** pip upgrade from ≤3.2 to ≥3.3 (`fastmcp-full.txt:38896`). Phase 1
+hit it going 3.0.0 → 3.4.7. Fix is `pip install --force-reinstall fastmcp`. **Phase 3 will hit this
+again on the 4.x bump — expect it, do not treat it as a migration failure.**
+
+**(c) The dependency cascade from `--force-reinstall` is accepted, not reverted.** It moved:
+
+| Package | Before | After |
+|---|---|---|
+| mcp | 1.26.0 | 1.30.0 |
+| pydantic | 2.12.5 | 2.13.5 |
+| pydantic-settings | 2.12.0 | 2.15.0 |
+| cyclopts | **5.0.0a4** (pre-release) | **4.25.3** (stable) |
+| starlette | 0.52.1 | 1.6.0 |
+
+Accepted because surgically pinning packages back would build a hybrid environment nobody ships —
+the same test-env/ship-env divergence §6.1 exists to eliminate. Two upsides: cyclopts moves off the
+undeclared pre-release alpha flagged in §2.2 onto what a fresh resolve actually picks, and pydantic
+now clears the 2.12 floor B2 requires.
+
+**One consequence Phase 3 must carry:** the venv's `mcp` (1.30.0) now diverges from
+`nocobot/uv.lock`'s pinned **1.26.0**. Both are SDK **v1** (camelCase), so §4.1's analysis stands
+unchanged — but when Phase 3 fixes the nocobot camelCase reads, it will be testing against 1.30.0
+while nocobot's Docker build ships 1.26.0. Refresh that lock as part of Phase 3 rather than leaving
+the divergence.
+
+**(d) Baseline unchanged.** 152 passed / 57 skipped, identical to Phase 0. The warning count reads 4
+instead of 3; Phase 1 traced it to a pre-existing leaked coroutine in `nocobot/agent_test.py` being
+GC'd during an unrelated test, so pytest attributes it to a 4th test name. Same defect, same source
+— only the label moved. Not a regression.
+
+### 6.3 Out-of-scope finding: nocobot's editable install is broken
+
+Reported by Phase 1, **not fixed, not assigned**. `nocobot/pyproject.toml` sets
+`packages = ["nocobot"]`, but the pyproject sits *inside* the package directory, so hatchling
+resolves it to `nocobot/nocobot`, which does not exist. The old `_nocobot.pth` was 0 bytes. Local
+`import nocobot` resolves only because pytest puts rootdir on `sys.path` — the same luck as the
+nocodb finder in §2.1.
+
+**Production is unaffected:** `nocobot/Dockerfile:9-14` reconstructs the hierarchy at COPY time
+deliberately. This is a local-dev-only defect. It touches packaging, so it is explicitly **not**
+folded into Phase 3 — flagged for a separate decision.
 
 ---
 

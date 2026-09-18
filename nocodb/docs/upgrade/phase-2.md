@@ -10,12 +10,27 @@
 ## Why this phase exists
 
 `nocodb/cli/generated.py` is committed output from `fastmcp generate-cli`, and it is **stale**
-(report §4.3):
+(report §4.3 — **read the correction block there, this section was wrong in the first draft**):
 
-- It has **62** `@call_tool_app.command` entries; the server exposes **63** (60 tools + 3 from
-  `ResourcesAsTools`).
-- It still defines `get_workflow_guide` (`:1558`) and `get_reference` (`:1580`) — from
+**THE COUNTS MATCH AND THE FILE IS STILL BROKEN.** Measured live by the architect:
+
+```
+generated.py commands: 62
+live server tools    : 62
+
+GHOSTS  (in CLI, not on server): ['get_reference', 'get_workflow_guide']
+MISSING (on server, not in CLI): ['list_resources', 'read_resource']
+```
+
+**Compare name sets. Never counts.** A `62 == 62` assertion passes on this file — which exposes two
+dead commands pointing at a deleted module and lacks the two commands that reach the 3 resources at
+all. If you verify by counting, you will certify a broken artifact as correct.
+
+- The ghosts are `get_workflow_guide` (`:1558`) and `get_reference` (`:1580`), from
   `nocodb/mcpserver/tools/docs.py`, **a module that has been deleted**.
+- The missing pair is `ResourcesAsTools`-derived; the CLI predates that switch.
+- Note `ResourcesAsTools` generates exactly **two** tools regardless of resource count — the 3
+  resources are reached *through* `read_resource`, not exposed individually.
 - Last regenerated at `c13aa72` (2026-03-11). The `ResourcesAsTools` switch (`09ddf0a`) and the
   formula-resource change (`327954e`) both landed 2026-03-12 **with no regen**.
 - `nocodb/docs/CLI.md:3` still claims "62 commands".
@@ -35,12 +50,28 @@ from 9876, launches `python3 -m nocodb.mcpserver --http --port $PORT`, runs
 `fastmcp generate-cli http://localhost:$PORT/mcp ... -f --timeout 60`, kills the server, then
 regex-post-processes the emitted source.
 
-Expected result: **63** commands, with `get_workflow_guide` and `get_reference` **gone**, and the
-3 `ResourcesAsTools`-derived entries present.
+Expected result: **62** commands whose **name set exactly equals** the live server's tool set —
+`get_workflow_guide` and `get_reference` gone, `list_resources` and `read_resource` present.
 
-If the count is not 63, **stop and escalate** — do not hand-edit `generated.py` to force the number.
-It is generated output; a wrong count means the generator or the server is wrong, and hand-patching
-would hide that from Phase 3.
+Verify by set difference in both directions, not by counting. The architect's check:
+
+```bash
+NOCODB_URL=https://example.invalid NOCODB_TOKEN=x NOCODB_BASE_ID=b venv/bin/python -c "
+import asyncio, re
+from fastmcp import Client
+from nocodb.mcpserver.server import mcp
+gen = set(re.findall(r'@call_tool_app\.command\(name=[\"'\"'\"']([^\"'\"'\"']+)', open('nocodb/cli/generated.py').read()))
+async def main():
+    async with Client(mcp) as c:
+        live = {t.name for t in await c.list_tools()}
+    print('GHOSTS :', sorted(gen - live))
+    print('MISSING:', sorted(live - gen))
+asyncio.run(main())"
+```
+
+Both lists must be empty. If they are not, **stop and escalate** — do not hand-edit `generated.py`
+to force agreement. It is generated output; a mismatch means the generator or the server is wrong,
+and hand-patching would hide that from Phase 3.
 
 ### 2. Harden `regenerate-cli.sh` — it currently fails open
 
