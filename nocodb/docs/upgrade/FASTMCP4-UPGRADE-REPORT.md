@@ -656,6 +656,92 @@ The **3.4.7** generator already emits a materially different template from 3.0.0
 filter syntax. If it does matter, the fix belongs in a post-processing step or companion doc —
 **never a hand-edit of generated output.**
 
+### 6.6 ⚠️ §4.1 UNDERSTATED nocobot — it is a full SDK v1→v2 migration
+
+**Found by Phase 3. The most consequential error in this report.** §4.1 called nocobot "2 camelCase
+reads". It is a transport-signature break plus a dependency-boundary problem.
+
+Architect-verified against the installed tree (`mcp==2.2.0`, `fastmcp==4.0.5`, `httpx2==2.13.0`):
+
+```
+from mcp.client.streamable_http import streamablehttp_client   -> ImportError
+from mcp.client.streamable_http import streamable_http_client  -> OK
+  signature: ['url', 'http_client', 'terminate_on_close']
+```
+
+| | v1 (1.30.0) | v2 (2.2.0) |
+|---|---|---|
+| name | `streamablehttp_client` | `streamable_http_client` |
+| params | `url, headers=, timeout=, sse_read_timeout=, terminate_on_close=, httpx_client_factory=, auth=` | `url, *, http_client: httpx2.AsyncClient\|None, terminate_on_close` |
+
+**`headers=` and `timeout=` are gone.** `nocobot/mcp_client.py:49` passes both, and `headers` is where
+the `MCP_API_KEY` bearer lives (`:32`). Under v2 they must be supplied via a constructed
+`httpx2.AsyncClient`, making httpx2 a nocobot runtime dependency (it currently declares
+`httpx>=0.25.0` at `pyproject.toml:26`). `sse_client` (`:48`) **keeps** `headers=`/`timeout=` — the
+two transports now diverge.
+
+**Why the report missed it:** §3.2 grepped for removed *FastMCP* APIs. nocobot imports none — it
+imports the raw SDK, and the raw SDK's client surface moved too. The grep was scoped to the wrong
+library for that service.
+
+**Why it blocked the camelCase fix:** Phase 3 inspected the mcp 1.30.0 wheel directly —
+`types.py:1320` `inputSchema`, `:1369` `isError`, no `populate_by_name`, no `alias_generator`. There
+are **no snake_case aliases on v1**. So `result.is_error` raises `AttributeError` on the version
+nocobot's Docker actually ships. The camelCase fix and the SDK migration are a package deal.
+
+#### The consequence neither the report nor Phase 3 stated: the shared venv is now unusable
+
+nocodb on FastMCP 4 requires `mcp>=2`; nocobot's code requires `mcp<2`. **One venv can no longer
+hold both.** Architect-verified: `import nocobot.mcp_client` raises ImportError, and the repo-root
+suite went from 164 passing to `ERROR nocobot/agent_test.py — Interrupted: 1 error during
+collection`, i.e. **zero tests run**.
+
+Production was never affected — the two Dockerfiles build independently and nocobot has its own
+`uv.lock`. Only local dev shared an environment.
+
+#### DECISION (user, 2026-09-17): migrate nocobot to SDK v2 now
+
+Phase 3 recommended cap-and-defer (`mcp<2`, refresh lock within v1, delete the `:103` fallback,
+leave `:162`). Sound reasoning — the wire format is unchanged, so a v1 client talks to a v4 server
+fine, and the only coupling was the shared venv.
+
+**The user chose the full port instead**, with the trade-offs stated explicitly: it is a behaviour
+change on the authenticated path, httpx2 becomes a nocobot runtime dep, and nocobot has only 29
+tests of unknown `mcp_client` coverage. Chosen to keep one venv and one suite.
+
+Required work: rename the transport; move the bearer into a constructed `httpx2.AsyncClient`;
+`:162` → `is_error`; `:103` → `input_schema` with the fallback **deleted**; declare httpx2; bound
+`mcp>=2,<3` (**not** unbounded — `mcp>=1.0.0` unbounded is what created this); refresh `uv.lock`
+onto v2; handle the diverged `sse_client` path explicitly.
+
+**Acceptance gate:** a test proving the `Authorization` header actually reaches the outbound request
+under v2. Importing cleanly proves nothing. This is the nocobot analogue of T5 — in the failure mode
+being guarded against, the bot connects, tools list, calls succeed, and the only symptom is that
+`MCP_API_KEY` silently stopped being enforced.
+
+### 6.7 Three Phase 3 corrections to earlier amendments
+
+1. **§6.2(b) had the boundary wrong.** The `cannot import name 'FastMCP'` ImportError did **not**
+   occur on 3.4.7 → 4.0.5; no `--force-reinstall` was needed. The bug is the fastmcp/fastmcp-slim
+   meta-package split at **3.2→3.3**, which Phase 1 crossed and Phase 3 does not. Prediction sound,
+   boundary misplaced.
+2. **§6.4's harness-port worry did not materialise.** All 12 Phase-1 tests pass on 4.0.5 with
+   **zero edits**, raw httpx `ASGITransport` and all. No port to `fastmcp.utilities.tests` needed.
+   Worth knowing: httpx 0.28.1 now survives in the venv only via litellm/python-telegram-bot, since
+   fastmcp 4 pulls httpx2 — the `test` extra declaring `httpx>=0.25.0` explicitly is what keeps a
+   fresh install working.
+3. **§4.2's UNVERIFIED bridge is now VERIFIED.** `tool.inputSchema` through a fastmcp `Client`
+   emits `FastMCPDeprecationWarning` and returns the correct value, exactly as documented.
+
+Also: `mcpserver_test.py:308,326` read `tool.inputSchema`. They postdate the report and so were
+absent from the 8-site list; they become hard failures under `FASTMCP_MCP_CAMELCASE_COMPAT=False`
+and are fixed to `.input_schema` with assertions unchanged.
+
+**4.0.5 delta (§1 staleness warning, resolved):** benign. The only substantive change is
+"Preserve field-level strict validation in lax mode" (honours `Field(strict=True)`/`StrictInt` —
+zero occurrences in this repo), plus a regression test for the OAuthProxy ID-JAG guard (no
+OAuthProxy here). Note the repo moved to **PrefectHQ/fastmcp**; `jlowin/fastmcp` redirects.
+
 #### Phase 3 note: `result.is_error` needs no bridge
 
 Post-regen camelCase sites in `generated.py` are unchanged: `:56`, `:59` (`block.mimeType`),
