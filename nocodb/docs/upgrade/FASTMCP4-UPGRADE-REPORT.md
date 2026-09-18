@@ -748,6 +748,99 @@ and are fixed to `.input_schema` with assertions unchanged.
 zero occurrences in this repo), plus a regression test for the OAuthProxy ID-JAG guard (no
 OAuthProxy here). Note the repo moved to **PrefectHQ/fastmcp**; `jlowin/fastmcp` redirects.
 
+### 6.8 Phase 3 complete (`f48d507`) — nocodb is on FastMCP 4.0.5
+
+Architect-verified: `pytest nocodb/` → **136 passed** (123 SDK + 13 MCP); repo-root suite correctly
+does **not** collect; `nocobot/` carries no Phase 3 residue (its only diff from `pre-fastmcp4` is
+Phase 2's `:218` docstring fix from `92d495c`, working tree clean).
+
+**Dependencies:** fastmcp 3.4.7 → 4.0.5, mcp 1.30.0 → 2.2.0, plus new mcp-types 2.2.0, httpx2
+2.13.0, httpcore2 2.13.0, truststore 0.10.4. **Unchanged:** cyclopts 4.25.3, pydantic 2.13.5,
+starlette 1.6.0, uvicorn, Authlib, httpx 0.28.1 — §6.2(c)'s cascade had already done the heavy
+lifting, so the 4.x bump only added the SDK v2 tree alongside. No `--force-reinstall`, no
+ImportError, confirming §6.7(1).
+
+**Floors:** `fastmcp>=4.0.5,<5` at all four sites (three extras + `test`). Floor equals tested
+version per §6.1. Capped at `<5` for the Phase 0 reason. **B2/B3 need no declaration in nocodb** —
+fastmcp-slim 4.0.5 declares `pydantic[email]>=2.12.0` and `starlette>=1.0.1` itself, satisfying them
+transitively.
+
+**`generated.py` needed no hand-patching.** The 4.x generator emits snake_case natively;
+regeneration alone fixed all five sites plus `import mcp.types` → `import mcp_types`. 56-line diff,
+100% the SDK v2 rename. All five hardened assertions matched first try and the name-set gate passed
+at 62. **`skill.md` is byte-identical at 28211** — §6.5's template-change concern did not recur.
+
+**Lockfile, no escalation needed.** `uv pip compile setup.py --extra mcp` works directly on
+`setup.py`; no packaging conversion. 72 pins in `nocodb/requirements-mcp.txt`. Dockerfile ported to
+the nocobot base image, removing the unpinned `pip install uv`.
+
+*Deviation worth knowing:* uv 0.10.7 has no `--check` on `pip compile`, so there is no direct
+`--locked` equivalent for a `setup.py` project. Equivalent guarantee obtained by re-resolving
+`.[mcp]` with `--offline` after install — which can only succeed if every specifier is already
+satisfied by what the lockfile installed. **Proven in both directions inside Docker:** clean build
+exits 0; with `fastmcp>=99` the build exits 1 at that layer. Image verified *running*, not merely
+building — `/health` 200, 62 tools listed in-container.
+
+**Tests: 13, not 12.** All 12 pass on 4.0.5 with **zero edits**, T5 included, before anything was
+touched. Only change: `:308`/`:326` → `.input_schema`, assertions identical.
+
+**T0 added — approved, keep it.** `conftest.py` sets `FASTMCP_MCP_CAMELCASE_COMPAT=False`; T0
+asserts `settings.mcp_camelcase_compat is False`. Without it, a renamed-upstream or mistyped env var
+leaves the bridge **on**, every surviving camelCase read keeps passing, and the suite certifies a
+migration it never tested. That is the same fail-open shape as the `62 == 62` count check (§4.3) and
+the permissive `validate=` default (§4.5) — a check that cannot fail is not a check. Phase 3 flagged
+it rather than slipping it in, which is the right instinct.
+
+**Residual greps all clean:** `.ping(` 0, `-32002` 0, full removed-API sweep 0 (§3.2 holds on 4.x),
+camelCase in `nocodb/` 0 code hits, `mcp.types` 0 after regen.
+
+Also updated six stale "FastMCP 3.0/3.x" current-state references and `DEPLOY_MCP.md`'s
+expected-build-output block. **Dated changelog lines left alone deliberately** (README.md:19,
+nocodb/README.md:18) — they record a Feb 2026 event and rewriting them would falsify history.
+
+### 6.9 TENTH ERROR — both advertised `fastmcp` commands are broken on 4.x
+
+`mcpserver/__init__.py:7-8` advertised `fastmcp run nocodb.mcpserver.server:mcp` and
+`fastmcp dev nocodb.mcpserver.server:mcp`. Neither works:
+
+- **`fastmcp run`** resolves a bare spec as a **filesystem path**. The dotted form errors
+  `File not found`. The file form `server.py:mcp` also fails —
+  `attempted relative import with no known parent package` — because `server.py` imports its
+  siblings relatively and only loads as part of the package (§5.1's deliberate circular import).
+  **Working form: `fastmcp run -m nocodb.mcpserver`** (verified, server starts).
+- **`fastmcp dev` is a COMMAND GROUP as of 4.x** — architect-verified:
+  `Usage: fastmcp dev COMMAND`, subcommands `apps` and `inspector`. `fastmcp dev <target>` errors
+  `Unknown command`. **Working form: `fastmcp dev inspector -m nocodb.mcpserver`.**
+
+Docstring fixed to the working forms. **Honest limitation, stated by Phase 3:** it could not
+establish whether the dotted form ever worked on 3.x — the corpus has no `/v3/` mirror of the CLI
+page. So the docstring documents what works on the installed version without claiming when it broke.
+The `dev` group change is definitely 4.x.
+
+### 6.10 Handoff state for the nocobot agent
+
+Phase 3 started two nocobot edits before the reassignment and **reverted both** (architect-verified).
+nocobot is at a clean, known state:
+
+- `mcp_client.py:103` — `hasattr(...) else {}` fallback **still present**
+- `mcp_client.py:162` — `result.isError` **still present**
+- `pyproject.toml:22` — back to **unbounded `mcp>=1.0.0`**
+
+**⚠️ That last one is a live exposure.** A `uv lock --upgrade` on nocobot today pulls mcp 2.2.0 and
+the bot dies at import. It is Phase 0's problem, still open on the other service, and it now belongs
+to the nocobot agent. The transport port was never started, so there are no httpx2 notes to inherit
+— and under the `fastmcp.Client` reframe there would be no use for them anyway.
+
+**Three findings Phase 3 hands over that are not in §6.6:**
+
+1. **`sse_client` survives v2 with `headers=`/`timeout=` intact** (signature verified). The two
+   transports genuinely diverge — `_open_transport()` at `:45-49` cannot stay symmetric.
+2. **SDK v1 has no snake_case aliases at all** — the mcp 1.30.0 wheel's `types.py:1320`
+   `inputSchema`, `:1369` `isError`, no `populate_by_name`, no `alias_generator`. There is no
+   version of nocobot that reads both spellings. It is a hard cutover.
+3. **`hasattr(c, 'text')` at `:159` is NOT a camelCase defect.** It is a legitimate content-block
+   discriminator and `.text` is unchanged in v2. **Easy to over-correct — do not touch it.**
+
 #### Phase 3 note: `result.is_error` needs no bridge
 
 Post-regen camelCase sites in `generated.py` are unchanged: `:56`, `:59` (`block.mimeType`),
