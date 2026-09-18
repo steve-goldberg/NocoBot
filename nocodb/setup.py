@@ -44,14 +44,17 @@ setup(
        "cli": [
            # CLI is now auto-generated from MCP server
            # Uses cyclopts (via fastmcp) instead of typer
-           "fastmcp>=3.0.2",
+           # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
+           "fastmcp>=3.0.2,<4",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
        "mcp": [
-           "fastmcp>=3.0.2",
+           # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
+           "fastmcp>=3.0.2,<4",
        ],
        "all": [
-           "fastmcp>=3.0.2",
+           # Capped pending FastMCP 4 migration - see docs/upgrade/FASTMCP4-UPGRADE-REPORT.md
+           "fastmcp>=3.0.2,<4",
            "tomli>=2.0.0;python_version<'3.11'",
        ],
    },
