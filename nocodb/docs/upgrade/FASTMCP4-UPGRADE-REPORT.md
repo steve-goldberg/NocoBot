@@ -429,10 +429,10 @@ stdio relies on the **default** transport (no `transport=` passed). Host default
 | Phase | Agent | Goal | Gate |
 |---|---|---|---|
 | **0** | `nocodb-phase-0` | Cap the pin at `<4`. Stop prod from self-upgrading. | Fresh resolve picks 3.x, not 4.x |
-| **1** | `nocodb-phase-1` | Build the MCP test net on 3.x. | Tests import FastMCP, assert 63 tools, assert auth **rejects** |
-| **2** | `nocodb-phase-2` | Clear pre-existing drift on 3.x. | `generated.py` = 63 cmds, no ghosts; regen script fails loudly |
+| **1** | `nocodb-phase-1` | Build the MCP test net on 3.x. | ✅ `d047b6d` — 12 tests, auth **rejects** proven by mutation |
+| **2** | `nocodb-phase-2` | Clear pre-existing drift on 3.x. | ✅ `92d495c` — name sets match; regen script fails loudly |
 | **3** | `nocodb-phase-3` | Migrate to 4.x. | Phase-1 tests green on 4.x; camelCase compat off |
-| **4** | architect | Live verification. | Health, auth reject, 63 tools, nocobot E2E |
+| **4** | architect | Live verification. | Health, auth reject, 62 tools, nocobot E2E |
 
 **Ordering is not negotiable.** Phase 0 before 1 because prod is currently exposed. Phase 2 before 3
 because stale `generated.py` poisons the upgrade signal. Phase 1 before 3 because there is otherwise
@@ -583,6 +583,84 @@ Two further notes from Phase 1 for Phase 3:
 Also added in Phase 1: a `test` extra in `setup.py` (pytest, pytest-asyncio, python-dotenv, fastmcp,
 httpx), deliberately **not** folded into `all`, so test dependencies never reach the Docker image
 (which installs `.[mcp]`).
+
+### 6.5 Phase 2 complete (`92d495c`) — four more report corrections
+
+Name sets now match exactly (architect-verified: `GHOSTS: []`, `MISSING: []`, suite 164/57).
+`regenerate-cli.sh` now asserts all five source substitutions plus four skill-file fixups, and
+writes nothing if any fails — proven by deliberately breaking a pattern (exit 1).
+
+**Correction A — §4.4 item 5 was wrong.** The `sed` block targeting `cli/SKILL.md` was *not* a
+silent no-op. macOS APFS is case-insensitive: `ls -i` gives `cli/SKILL.md` and `cli/skill.md` the
+**same inode (154415357)** — architect-verified. The sed has been running all along. It remains a
+latent bug on any case-sensitive filesystem, so hardening was still correct, but the diagnosis was
+not. Phase 2 moved all four fixups into the asserted Python block, which also normalises the name
+(`generate-cli` writes `SKILL.md`; the tracked file is `skill.md`).
+
+**Correction B — §2.1's `nocodb 3.0.0` was an artifact, not a skew.** `setup.py:16` calls
+`get_version()`, which regexes `__version__` out of `__init__.py`, so the two **cannot** disagree.
+The stale 3.0.0 came from an orphaned, gitignored `./nocodb.egg-info/` at the **repo root** (dated
+Feb 13 2026, no `setup.py` beside it — a pre-monorepo leftover). Repo root is on `sys.path`, so it
+shadowed the real dist; from `/tmp` the same venv already reported 3.1.0. Removed (backed up to
+`/tmp/nocodb.egg-info.backup-3.0.0`). Architect-verified: now reads **3.1.0** from the repo root.
+So "release never cut or bump never installed" was a false dichotomy — neither.
+
+**Correction C — "123 tests" in `CLAUDE.md` was correct.** My `phase-2.md` implied it needed
+updating to 209. It does not: that line sits under `### nocodb SDK`, and
+`pytest --collect-only nocodb/infra nocodb/filters` returns exactly **123** (78+30+10+5) —
+architect-verified. Overwriting it would have *introduced* an error. Clarified instead: 123 SDK,
+12 MCP, 221 repo-wide.
+
+**Correction D — new finding in nocobot.** `nocobot/mcp_client.py:218` described
+`nocodb://tools-reference` as "All 62 tools"; the resource actually names only **53** of the 62.
+Replaced with a count-free description rather than another number that rots. One line in an LLM
+prompt string, unrelated to the camelCase sites at `:103`/`:162`.
+
+**Two further fail-open paths found in `regenerate-cli.sh`, beyond the four I listed:**
+1. `PROJECT_DIR` was not exported until `:114`, *after* the post-processing heredoc at `:50`, so
+   `os.environ.get("PROJECT_DIR","")` was empty and the path fell through to a cwd-relative
+   `cli/generated.py`. It only ever worked because the script is run from `nocodb/`.
+2. `sed -i ''` is BSD-only and fails on GNU sed.
+
+**Scope addition, approved:** Phase 2 replaced the script's trailing count print with a **name-set
+gate against the live server**. The four template assertions catch generator drift, but nothing in
+the script would have caught the semantic drift this phase existed to fix. Proven by mutating a
+command name to `records_list_TYPO`: count stays 62, exit 1 with both difference lists. **Keep it.**
+
+#### Credential exposure during regeneration: none
+
+Contrary to the §6.4 warning's worst case, the regen sent **zero requests** to the live instance.
+`dependencies.py:126-137` `init_dependencies()` only constructs a client object with no network
+call (confirmed: it "connects" to `https://example.invalid` instantly and without error), and
+`generate-cli` calls only `list_tools`. The access log shows only localhost `/mcp` traffic.
+Credentials were present in the process environment but nothing was transmitted. The §6.4 rule
+still stands for Phases 3–4 — but running `regenerate-cli.sh` is not itself a data-touching act.
+
+#### ⚠️ Generator template change — Phase 3 must NOT attribute this to 4.x
+
+The **3.4.7** generator already emits a materially different template from 3.0.0. Absorbed by
+`92d495c`, but it will look like upgrade damage if encountered cold:
+
+- `cli/skill.md`: **39044 → 28211 bytes** (1522 → 923 lines). 3.0.0 dumped each tool's entire
+  docstring; 3.4.7 emits only the summary paragraph. **Lost:** every `Returns:` block and the
+  filter-syntax prose on `records_list`.
+- **Gained:** the per-flag Description column, previously empty or `"JSON string"`, is now populated
+  from real parameter descriptions. `generated.py` makes the same trade — command docstrings shrink,
+  `cyclopts.Parameter(help=...)` goes from `""` to real text.
+- Cosmetic upstream defect in 3.4.7: parameter help embeds a **literal `\n`** (escaped, not a
+  newline) before the inlined JSON Schema blob, so `--help` renders
+  `...(e.g., "Name,Email,Status")\nJSON Schema: {...}`. Generated output — do not hand-fix.
+
+**Open item, user's call:** whether the lost `skill.md` prose matters. Mitigating: `docs/FILTERS.md`,
+`skills/cli/nocodb-v3-cli-skill.md`, and `mcpserver/resources/tools-reference.md` all still carry
+filter syntax. If it does matter, the fix belongs in a post-processing step or companion doc —
+**never a hand-edit of generated output.**
+
+#### Phase 3 note: `result.is_error` needs no bridge
+
+Post-regen camelCase sites in `generated.py` are unchanged: `:56`, `:59` (`block.mimeType`),
+`:91-92` (`tool.inputSchema`), `:133`, `:177` (`msg.content.mimeType`). But `:39` and `:72` read
+`result.is_error`, which is **already snake_case in both generators** — no bridge needed there.
 
 ---
 

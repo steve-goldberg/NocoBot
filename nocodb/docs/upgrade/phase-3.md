@@ -64,7 +64,9 @@ regenerate under 4.x via the Phase-2-hardened `regenerate-cli.sh`. If the genera
 snake_case natively, the regenerated file needs no patching. If the hardened script now fails on a
 changed template, that is the script doing its job — fix the patterns, do not disable the assertions.
 
-Expected: still **63** commands.
+Expected: still **62** commands, and — the assertion that actually matters — a **name set identical
+to the live server's**. Phase 2 built that check into `regenerate-cli.sh` itself, so the script now
+exits non-zero on a mismatch. Do not weaken it.
 
 ### 3. Raise the dependency floors
 
@@ -199,7 +201,7 @@ to sanitise the environment with `env -u VAR`; `tests/test_integration_full.py:2
 
 - [ ] `fastmcp` 4.x installed; all Phase 1 tests (T1–T6) **green on 4.x**, T5 especially
 - [ ] `nocobot` camelCase fixed; the `:103` silent fallback **deleted**, not repointed
-- [ ] `generated.py` regenerated under 4.x; still 63 commands
+- [ ] `generated.py` regenerated under 4.x; 62 commands **and name set identical to live server**
 - [ ] Declared floors raised; upper-bound decision stated
 - [ ] `nocodb` lockfile added; Dockerfile uses the `--locked` pattern
 - [ ] camelCase compat disabled in tests; suite still green
