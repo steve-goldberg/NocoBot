@@ -437,8 +437,9 @@ stdio relies on the **default** transport (no `transport=` passed). Host default
 | **0** | `nocodb-phase-0` | Cap the pin at `<4`. Stop prod from self-upgrading. | Fresh resolve picks 3.x, not 4.x |
 | **1** | `nocodb-phase-1` | Build the MCP test net on 3.x. | ✅ `d047b6d` — 12 tests, auth **rejects** proven by mutation |
 | **2** | `nocodb-phase-2` | Clear pre-existing drift on 3.x. | ✅ `92d495c` — name sets match; regen script fails loudly |
-| **3** | `nocodb-phase-3` | Migrate to 4.x. | Phase-1 tests green on 4.x; camelCase compat off |
-| **4** | architect | Live verification. | Health, auth reject, 62 tools, nocobot E2E |
+| **3** | `nocodb-phase-3` | Migrate to 4.x. | ✅ `f48d507` — 13 tests green on 4.0.5, compat off |
+| **3b** | `nocodb-mcp-v2-protocol-upgrade` | nocobot → `fastmcp.Client`. | ✅ `bad76bf` — auth gate proven by mutation |
+| **4** | architect | Live verification. | ✅ **PASSED** — see §7 |
 
 **Ordering is not negotiable.** Phase 0 before 1 because prod is currently exposed. Phase 2 before 3
 because stale `generated.py` poisons the upgrade signal. Phase 1 before 3 because there is otherwise
@@ -849,7 +850,94 @@ Post-regen camelCase sites in `generated.py` are unchanged: `:56`, `:59` (`block
 
 ---
 
-## 7. Rules for every phase agent
+## 6.11 nocobot complete (`bad76bf`) — and Phase 4 PASSED
+
+**Architect-verified.** Repo-root suite collects again: **174 passed / 57 skipped**
+(136 nocodb + 29 nocobot existing + 9 new). `uv export --locked` exits 0 against the regenerated
+lock. The unbounded `mcp>=1.0.0` exposure from §6.10 is closed — `mcp` and `httpx` dropped as direct
+deps, `fastmcp>=4.0.5,<5` added.
+
+**Auth mutation independently reproduced by the architect.** Dropping `auth=` from `_build_client`:
+
+```
+FAILED nocobot/mcp_client_test.py::test_authorization_header_reaches_the_server
+1 failed, 8 passed
+...while the client logged "Discovered 3 MCP tools" and "Cached 1 MCP resources"
+```
+
+The client connected and worked **with no auth at all**. Exactly one assertion noticed. That is the
+T5 shape reproduced in the second service. The timeout is mutation-proven too.
+
+### ⚠️ Harness finding: `asgi_server` does NOT work for outbound-request assertions
+
+Its own docstring: *"nothing is listening on the network, a plain `httpx2.AsyncClient()` cannot
+reach this server."* `MCPClient` builds its transport internally, so there is no seam to inject the
+ASGI bridge without changing production code. **The spec's suggested approach was wrong.**
+
+Working approach: `run_server_in_process` — a real uvicorn on a real port, with the probe tool
+returning the captured header via `get_http_headers(include={"authorization"})` **as its result**,
+so nothing crosses the process boundary except the MCP response. ~1.3s for the file.
+**Do not hand `asgi_server` to a future agent for this shape of assertion.**
+
+### The compat flag strengthened this migration for free
+
+`conftest.py` sets `FASTMCP_MCP_CAMELCASE_COMPAT=False` for the whole session, so the bridge was
+**off** for every nocobot run. The snake_case reads are not merely preferred over a deprecated
+bridge — under this suite a missed camelCase read is a **hard failure, not a warning**. Phase 3's
+conftest change silently raised the acceptance bar for work that came after it, which is the
+compounding benefit of building the net before doing the migration.
+
+---
+
+## 7. Phase 4 — live verification (architect, 2026-09-17)
+
+Real server, `python -m nocodb.mcpserver --http`, dummy credentials only. **Nothing touched the
+live NocoDB instance.**
+
+| Check | Result |
+|---|---|
+| `/health` | `200 {"status":"ok"}` |
+| `/mcp` wrong bearer | **401** |
+| `/mcp` no bearer | **401** |
+| `/mcp` correct bearer | **200** |
+| nocobot E2E — tools discovered | **62** |
+| nocobot E2E — transform tools | `['list_resources', 'read_resource']` both present |
+| nocobot E2E — resources cached | **3** |
+| nocobot E2E — tools with empty schema | **none** ← the `:103` bug would surface here |
+| nocobot E2E — wrong API key | rejected (`MCPError`) |
+
+The empty-schema check is the one that closes the loop on §4.1. The original defect shipped `{}` as
+every tool's schema to the LLM; a live end-to-end run through the rewritten client now proves all 62
+carry real parameter schemas.
+
+**Not covered by Phase 4:** a real Telegram round-trip and a deploy to Dokploy. Both need live
+credentials and are the user's call.
+
+---
+
+## 8. Open items — user decisions, none blocking
+
+1. **`tests/` is gitignored** (`.gitignore:15`), so Phase 1's `NOCODB_RUN_INTEGRATION` guard lives
+   only in the working copy and will not survive a fresh clone. Recommendation: keep it ignored
+   (files may carry real NocoDB details); decide between a documented local-only harness, or moving
+   credential-free parts into tracked colocated tests.
+2. **Lost `skill.md` prose** (§6.5). The 3.4.7 generator dropped every `Returns:` block and the
+   filter-syntax prose (39044 → 28211 bytes). The 4.x hop caused no *further* loss — byte-identical
+   — but the original loss stands. Fix belongs in a post-processing step or companion doc, never a
+   hand-edit of generated output.
+3. **Live-instance residue check** after the Phase 1 incident (§6.4). Reported clean by that agent;
+   never independently confirmed, since that means connecting to production.
+4. **`DEPLOY_MCP.md` build-path contradiction** (§2.4): `:31,45` say Build Path `/` + context
+   `nocodb`; `CLAUDE.md:13` says `/nocodb/`. The Dockerfile only works with context `nocodb/`, and
+   the new `.dockerignore` assumes it. **Worth resolving before the next deploy.**
+5. **Unfixed, deliberately:** `require_confirm` dead code (`errors.py:43-66`), the hardcoded `/mcp`
+   path (`regenerate-cli.sh:56`, `nocobot/config.py:20`), nocobot's broken editable install (§6.3),
+   the pre-existing `AsyncMock` coroutine warning in `nocobot/agent_test.py:28`, and CI (none
+   exists — nothing runs these 174 tests on push).
+
+---
+
+## 9. Rules for every phase agent
 
 1. **Read this report fully before acting.** Read your phase prompt second.
 2. **Your phase only.** Do not drift into another phase's scope. If you spot something outside your
