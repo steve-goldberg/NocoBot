@@ -5,14 +5,22 @@
 #   ./scripts/regenerate-cli.sh
 #
 # Requirements:
-#   - fastmcp >= 3.0.0
+#   - fastmcp >= 3.4.7,<4
 #   - NOCODB_URL, NOCODB_TOKEN, NOCODB_BASE_ID (via .env, env vars, or .nocodbrc)
+#
+# Fail-fast contract: every post-processing substitution asserts that it
+# matched, and the run ends with a name-set comparison between the emitted
+# commands and the live server's tools. A generator whose template changes, or
+# a server/CLI drift, exits non-zero instead of reporting success on a broken
+# artifact. Never relax an assertion to make a run pass -- a non-match means
+# the generator or the server changed and the script needs updating.
 
-set -e
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(dirname "$PROJECT_DIR")"
+export PROJECT_DIR
 
 # Source .env if it exists
 if [ -f "$REPO_ROOT/.env" ]; then
@@ -24,6 +32,15 @@ PORT=9876
 while nc -z localhost $PORT 2>/dev/null; do
     PORT=$((PORT + 1))
 done
+
+SERVER_PID=""
+cleanup() {
+    if [ -n "$SERVER_PID" ]; then
+        kill "$SERVER_PID" 2>/dev/null || true
+        SERVER_PID=""
+    fi
+}
+trap cleanup EXIT
 
 echo "Starting MCP server on port $PORT..."
 python3 -m nocodb.mcpserver --http --port $PORT &
@@ -40,88 +57,200 @@ if fastmcp generate-cli "http://localhost:$PORT/mcp" "$PROJECT_DIR/cli/generated
     echo "Generated cli/generated.py"
 else
     echo "Error: Failed to generate CLI"
-    kill $SERVER_PID 2>/dev/null || true
     exit 1
 fi
 
-kill $SERVER_PID 2>/dev/null || true
+cleanup
 
-# Post-process: CLIENT_SPEC -> StdioTransport, app name -> nocodb
+# Post-process: CLIENT_SPEC -> StdioTransport, app name -> nocodb, skill.md naming.
+# Each substitution asserts its match; a non-match exits non-zero.
 python3 << 'EOF'
-import re, sys, os
+import os
+import re
+import sys
+from pathlib import Path
 
-path = os.path.join(os.environ.get("PROJECT_DIR", ""), "cli/generated.py")
-if not os.path.exists(path):
-    # fallback
-    path = sys.argv[1] if len(sys.argv) > 1 else "cli/generated.py"
+project_dir = Path(os.environ["PROJECT_DIR"])
+path = project_dir / "cli/generated.py"
+if not path.exists():
+    sys.exit(f"Error: generate-cli did not produce {path}")
 
-with open(path, "r") as f:
-    content = f.read()
+content = path.read_text()
+failures = []
 
-# Replace CLIENT_SPEC from HTTP URL to StdioTransport
-old_spec = re.search(r"CLIENT_SPEC = 'http://localhost:\d+/mcp'", content)
-if old_spec:
-    content = content.replace(
-        old_spec.group(0),
-        "CLIENT_SPEC = StdioTransport(\n"
-        "    command=sys.executable,\n"
-        '    args=["-m", "nocodb.mcpserver"],\n'
-        "    env=os.environ.copy(),\n"
-        ")"
-    )
 
-# Add StdioTransport and os imports
-if "from fastmcp.client.transports import StdioTransport" not in content:
-    content = content.replace(
-        "from fastmcp import Client",
-        "from fastmcp import Client\nfrom fastmcp.client.transports import StdioTransport"
-    )
-if "import os" not in content:
-    content = content.replace(
-        "import sys",
-        "import os\nimport sys"
-    )
+def require_sub(pattern, replacement, label, *, count=1, expected=1):
+    """Apply a regex substitution that MUST match, or record a failure."""
+    global content
+    new, n = re.subn(pattern, replacement, content, count=count)
+    if n != expected:
+        failures.append(
+            f"{label}: expected {expected} match(es) for {pattern!r}, found {n}. "
+            "The generator template has changed -- update this script."
+        )
+        return
+    content = new
 
-# Update app name
-content = re.sub(
+
+def require_present(needle, anchor, replacement, label):
+    """Ensure `needle` ends up in the file, injecting at `anchor` if absent."""
+    global content
+    if needle in content:
+        return
+    new, n = re.subn(re.escape(anchor), replacement, content, count=1)
+    if n != 1:
+        failures.append(
+            f"{label}: {needle!r} absent and anchor {anchor!r} not found. "
+            "The generator template has changed -- update this script."
+        )
+        return
+    content = new
+
+
+# 1. CLIENT_SPEC: HTTP URL -> StdioTransport
+require_sub(
+    r"CLIENT_SPEC = 'http://localhost:\d+/mcp'",
+    "CLIENT_SPEC = StdioTransport(\n"
+    "    command=sys.executable,\n"
+    '    args=["-m", "nocodb.mcpserver"],\n'
+    "    env=os.environ.copy(),\n"
+    ")",
+    "CLIENT_SPEC -> StdioTransport",
+)
+
+# 2. StdioTransport import
+require_present(
+    "from fastmcp.client.transports import StdioTransport",
+    "from fastmcp import Client",
+    "from fastmcp import Client\nfrom fastmcp.client.transports import StdioTransport",
+    "StdioTransport import",
+)
+
+# 3. os import (CLIENT_SPEC above uses os.environ)
+require_present(
+    "import os",
+    "import sys",
+    "import os\nimport sys",
+    "os import",
+)
+
+# 4. cyclopts app name
+require_sub(
     r'app = cyclopts\.App\(name="localhost", help="CLI for localhost MCP server"\)',
     'app = cyclopts.App(name="nocodb", help="NocoDB CLI - Agent-friendly command-line interface")',
-    content
+    "cyclopts app name",
 )
 
-# Update docstring
-content = re.sub(
+# 5. Module docstring
+require_sub(
     r'"""CLI for localhost MCP server\.',
     '"""CLI for NocoDB MCP server.',
-    content
+    "module docstring",
 )
 
-with open(path, "w") as f:
-    f.write(content)
+# --- skill.md -------------------------------------------------------------
+# generate-cli writes `SKILL.md` next to the output file. The tracked file is
+# `cli/skill.md`; on a case-insensitive filesystem (macOS APFS) those are the
+# same inode, on Linux they are not. Resolve it case-insensitively, normalise
+# to the tracked lowercase name, then apply the substitutions with assertions.
+cli_dir = project_dir / "cli"
+candidates = [p for p in cli_dir.iterdir() if p.name.lower() == "skill.md"]
+if len(candidates) != 1:
+    failures.append(
+        f"skill file: expected exactly one skill.md in {cli_dir}, found "
+        f"{[p.name for p in candidates]}"
+    )
+    skill_path = None
+else:
+    skill_path = candidates[0]
+    if skill_path.name != "skill.md":
+        # Two-step rename: a direct rename is a no-op on a case-insensitive FS.
+        tmp = cli_dir / "skill.md.tmp-case"
+        skill_path.rename(tmp)
+        skill_path = cli_dir / "skill.md"
+        tmp.rename(skill_path)
+        print(f"Normalised skill file name -> {skill_path.name}")
 
-print("Updated CLIENT_SPEC, app name, docstring")
+if skill_path is not None:
+    skill = skill_path.read_text()
+
+    def require_skill_sub(old, new, label, *, expected=1, all_=False):
+        global skill
+        n = skill.count(old)
+        if all_:
+            if n < 1:
+                failures.append(f"skill.md {label}: {old!r} not found")
+                return
+        elif n != expected:
+            failures.append(
+                f"skill.md {label}: expected {expected} occurrence(s) of {old!r}, found {n}. "
+                "The generator template has changed -- update this script."
+            )
+            return
+        skill = skill.replace(old, new)
+
+    require_skill_sub('name: "localhost-cli"', 'name: "nocodb-cli"', "skill name")
+    require_skill_sub(
+        "CLI for the localhost MCP server",
+        "CLI for the NocoDB MCP server",
+        "description",
+    )
+    require_skill_sub("# localhost CLI", "# NocoDB CLI", "heading")
+    require_skill_sub(
+        "uv run --with fastmcp python generated.py",
+        "nocodb",
+        "invocation",
+        all_=True,
+    )
+
+if failures:
+    print("\nPost-processing FAILED -- nothing was written:", file=sys.stderr)
+    for f in failures:
+        print(f"  - {f}", file=sys.stderr)
+    sys.exit(1)
+
+path.write_text(content)
+skill_path.write_text(skill)
+print("Updated CLIENT_SPEC, imports, app name, docstring, skill.md")
 EOF
 
-# Update SKILL.md naming
-if [ -f "$PROJECT_DIR/cli/SKILL.md" ]; then
-    sed -i '' 's/name: "localhost-cli"/name: "nocodb-cli"/' "$PROJECT_DIR/cli/SKILL.md"
-    sed -i '' 's/CLI for the localhost MCP server/CLI for the NocoDB MCP server/' "$PROJECT_DIR/cli/SKILL.md"
-    sed -i '' 's/# localhost CLI/# NocoDB CLI/' "$PROJECT_DIR/cli/SKILL.md"
-    sed -i '' "s|uv run --with fastmcp python generated.py|nocodb|g" "$PROJECT_DIR/cli/SKILL.md"
-    echo "Updated SKILL.md"
-fi
-
-export PROJECT_DIR="$PROJECT_DIR"
+# Final gate: the emitted command names must EXACTLY equal the server's tool
+# names. Counts are not a check -- generated.py once carried 62 commands
+# against a 62-tool server while two were ghosts and two were missing.
 python3 << 'PYEOF'
+import asyncio
 import os
-path = os.path.join(os.environ["PROJECT_DIR"], "cli/generated.py")
-with open(path, "r") as f:
-    content = f.read()
-
 import re
-# Count tools
-tools = re.findall(r'@call_tool_app\.command', content)
-print(f"CLI regenerated: {len(tools)} tool commands")
+import sys
+from pathlib import Path
+
+from fastmcp import Client
+
+from nocodb.mcpserver.server import mcp
+
+path = Path(os.environ["PROJECT_DIR"]) / "cli/generated.py"
+generated = set(
+    re.findall(r"@call_tool_app\.command\(name='([^']+)'", path.read_text())
+)
+
+
+async def main():
+    async with Client(mcp) as client:
+        return {tool.name for tool in await client.list_tools()}
+
+
+live = asyncio.run(main())
+
+ghosts = sorted(generated - live)
+missing = sorted(live - generated)
+
+if ghosts or missing:
+    print("\nCLI/server name-set MISMATCH:", file=sys.stderr)
+    print(f"  ghosts  (in CLI, not on server): {ghosts}", file=sys.stderr)
+    print(f"  missing (on server, not in CLI): {missing}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"CLI regenerated: {len(generated)} tool commands, name set matches server exactly")
 PYEOF
 
 echo ""

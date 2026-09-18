@@ -198,10 +198,10 @@ async def test_t1_registers_expected_tools():
     """The server exposes the 60 decorated tools plus exactly 2 transform tools.
 
     Asserted structurally rather than as a bare total. A flat count is not
-    worth much here: cli/generated.py currently holds 62 commands against a
-    62-tool server and is still wrong, because it carries two commands for a
-    deleted module and is missing the two transform tools. Comparing name sets
-    reports *which* tools drifted.
+    worth much here: before phase 2, cli/generated.py held 62 commands against
+    a 62-tool server and was still wrong, because it carried two commands for a
+    deleted module and was missing the two transform tools. A `62 == 62` check
+    passed on that file. Comparing name sets reports *which* tools drifted.
     """
     async with Client(mcp) as client:
         tools = await client.list_tools()

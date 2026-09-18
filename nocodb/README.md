@@ -25,8 +25,8 @@
 ## Key Features
 
 - 🐍 **Python SDK** - Full v3 Data API + hybrid v2/v3 Meta API
-- 🤖 **MCP Server** - 60 tools for Claude Desktop & AI integrations (FastMCP 3.0)
-- ⌨️ **CLI** - 60 commands auto-generated from MCP server
+- 🤖 **MCP Server** - 62 tools for Claude Desktop & AI integrations (FastMCP 3.x)
+- ⌨️ **CLI** - 62 commands auto-generated from MCP server
 - 🏠 **Self-Hosted First** - Built for community edition
 
 ---

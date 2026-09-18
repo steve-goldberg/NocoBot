@@ -215,7 +215,7 @@ class MCPClient:
             "",
             "## Reference Tools (call on-demand via read_resource)",
             "- `nocodb://schema-discovery-rules` — CALL FIRST before any query",
-            "- `nocodb://tools-reference` — All 62 tools, field types, filter syntax",
+            "- `nocodb://tools-reference` — Tool reference by category, field types, filter syntax",
             "- `nocodb://formula-reference` — Formula functions and operators",
             "",
             "## Rules",

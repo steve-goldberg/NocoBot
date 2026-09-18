@@ -1,6 +1,13 @@
 # Command-Line Interface
 
-Auto-generated CLI via `fastmcp generate-cli` with 62 commands mirroring the MCP server tools.
+Auto-generated CLI via `fastmcp generate-cli` with 62 `call-tool` commands — one per tool the MCP
+server exposes (60 `@mcp.tool` functions + `list_resources` and `read_resource` from the
+`ResourcesAsTools` transform).
+
+Regenerate with `nocodb/scripts/regenerate-cli.sh`. The script fails non-zero if any
+post-processing substitution stops matching, or if the emitted command names stop matching the
+server's tool names exactly. **Do not hand-edit `cli/generated.py` or `cli/skill.md`** — both are
+build output, and hand-patching them hides generator or server drift instead of surfacing it.
 
 ## Installation
 
