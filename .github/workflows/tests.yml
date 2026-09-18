@@ -17,6 +17,12 @@ name: Tests
 on:
   push:
   pull_request:
+  # Manual trigger. Registering this repo's first-ever workflow took GitHub
+  # about seven minutes, during which pushes produced no runs at all and there
+  # was no way to ask for one. A dispatch button turns that class of problem
+  # into something you can poke rather than diagnose. The button appears in the
+  # UI once this file reaches the default branch.
+  workflow_dispatch:
 
 # A superseded run has nothing left to tell us. Push and pull_request events
 # get distinct refs, so both still run for a branch with an open PR.
