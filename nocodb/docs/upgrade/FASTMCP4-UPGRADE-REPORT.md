@@ -128,7 +128,24 @@ full dependency re-resolve.
 **a README edit can ship FastMCP 4.x to production.** This is the single most urgent fact in this
 document and is why Phase 0 exists.
 
-Contradiction to be aware of: `DEPLOY_MCP.md:31,45` says Build Path `/` + Docker Context Path
+> **CORRECTED 2026-09-18 — THIRTEENTH ERROR, and it is in the claim above.** Deployment screenshots
+> supplied by the user show the Dokploy app was pointed at branch **`config-refactor`**, which was
+> merged via PR #17 on 2026-03-19 and **deleted from the remote**. With Auto Deploy watching a ref
+> that no longer exists, **a push to `master` could not have triggered anything.**
+>
+> The exposure was real but narrower than stated: any *manual* redeploy still re-resolves
+> `fastmcp>=3.0.2` against live PyPI and would have pulled 4.0.5. Capping in Phase 0 was correct;
+> the trigger described was not.
+>
+> **Root cause of the error:** the risk was inferred from `DEPLOY_MCP.md` plus `Dockerfile` rather
+> than from the deployment itself. Nothing in the repo can tell you which branch Dokploy watches —
+> that fact lives only in the Dokploy UI. One screenshot settled on day one what four agents worked
+> around for a day. **When a claim depends on external system state, go look at the external
+> system.**
+
+Contradiction to be aware of — **RESOLVED 2026-09-18, see §8 item 4: `DEPLOY_MCP.md` was correct and
+`CLAUDE.md` was wrong; they are three distinct Dokploy fields.** As originally written:
+`DEPLOY_MCP.md:31,45` says Build Path `/` + Docker Context Path
 `nocodb`; `CLAUDE.md:13` says Build Path `/nocodb/`. The Dockerfile only works with context =
 `nocodb/` (required by the `package_dir` mapping at `setup.py:20-28` and the bare
 `open('README.md')` at `setup.py:38`).
@@ -927,9 +944,15 @@ credentials and are the user's call.
    hand-edit of generated output.
 3. **Live-instance residue check** after the Phase 1 incident (§6.4). Reported clean by that agent;
    never independently confirmed, since that means connecting to production.
-4. **`DEPLOY_MCP.md` build-path contradiction** (§2.4): `:31,45` say Build Path `/` + context
-   `nocodb`; `CLAUDE.md:13` says `/nocodb/`. The Dockerfile only works with context `nocodb/`, and
-   the new `.dockerignore` assumes it. **Worth resolving before the next deploy.**
+4. ~~**`DEPLOY_MCP.md` build-path contradiction**~~ — **RESOLVED 2026-09-18.** Deployment
+   screenshots confirm **`DEPLOY_MCP.md` was correct** and `CLAUDE.md:13` was wrong. These are three
+   distinct Dokploy fields, not one: Build Path `/`, Docker File `nocodb/Dockerfile`, Docker Context
+   Path `nocodb`. `CLAUDE.md` conflated Build Path with the context path; it now documents all three
+   for both services. No Dockerfile change was needed.
+
+   **Superseded by a real operational issue:** the app was deploying from the deleted
+   `config-refactor` branch (see the §2.4 correction). The user is repointing it. `DEPLOY_MCP.md`
+   now carries a warning about that silent failure mode.
 5. **Unfixed, deliberately:** `require_confirm` dead code (`errors.py:43-66`), the hardcoded `/mcp`
    path (`regenerate-cli.sh:56`, `nocobot/config.py:20`), nocobot's broken editable install (§6.3),
    the pre-existing `AsyncMock` coroutine warning in `nocobot/agent_test.py:28`, and CI (none

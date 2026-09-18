@@ -30,6 +30,12 @@ Deploy the NocoDB MCP Server to Dokploy as an HTTP service that can be accessed 
 5. Branch: `master` (or feature branch)
 6. Build Path: `/` (repo root - required for monorepo)
 
+> **Keep the branch alive.** If the configured branch is later merged and deleted on the remote,
+> Dokploy keeps pointing at a ref that no longer exists. Pushes stop triggering builds, the app
+> silently keeps serving its last image, and a merged PR looks deployed when it is not. After
+> merging a feature branch, repoint the app at `master` — for **every** app in the project, not
+> just the one you were working on.
+
 ---
 
 ## Step 3: Configure Build Settings

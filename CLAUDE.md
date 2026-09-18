@@ -10,16 +10,34 @@ NocoBot monorepo — Telegram bot with NocoDB MCP agent, plus the bundled Python
 2. **nocobot/** - Telegram bot with NocoDB MCP agent integration
 
 **Dokploy Deployment:**
-- MCP Server: Build Path = `/nocodb/`
-- Telegram Bot: Build Path = `/nocobot/`
+
+This is a monorepo, so **Build Path stays at `/`** while the Docker File and Context Path point into
+the subdirectory. These are three separate Dokploy fields — do not collapse them:
+
+| Field | MCP Server | Telegram Bot |
+|---|---|---|
+| Build Path | `/` | `/` |
+| Docker File | `nocodb/Dockerfile` | `nocobot/Dockerfile` |
+| Docker Context Path | `nocodb` | `nocobot` |
+
+The context path is not cosmetic. `nocodb/setup.py:20-28` maps packages relative to `nocodb/` and
+`:38` reads `README.md` from it; `nocobot/Dockerfile:10-14` rebuilds the package hierarchy on the
+assumption that the context is `nocobot/`. Both images fail to build from the repo root.
+
+Branch and trigger are configured per-app in Dokploy (Provider tab). If a deploy appears to succeed
+but nothing changes, check the app is pointed at a branch that still exists on the remote.
+
+See `nocodb/docs/DEPLOY_MCP.md` for full deployment steps.
 
 ### nocodb SDK
 
-**Status:** v3.1.0 - Feature complete (123 SDK tests in `infra/` + `filters/`, plus 12 MCP server tests)
+**Status:** v3.1.0 - Feature complete (123 SDK tests in `infra/` + `filters/`, plus 13 MCP server tests)
 
-Repo-wide the suite collects **221**: 164 run offline, and 57 live-integration tests under `tests/`
-stay skipped unless `NOCODB_RUN_INTEGRATION=1` is set. Never set that flag casually — those 57
-create and delete a real base on the configured instance.
+Repo-wide the suite collects **231**: 174 run offline (123 SDK + 13 MCP server + 38 nocobot), and 57
+live-integration tests under `tests/` stay skipped unless `NOCODB_RUN_INTEGRATION=1` is set. Never
+set that flag casually — those 57 create and delete a real base on the configured instance, and
+`tests/test_integration_full.py` calls `load_dotenv()` itself, so `env -u NOCODB_URL` will **not**
+protect you.
 
 This client uses a hybrid v2/v3 API approach based on what's available in self-hosted NocoDB:
 - **v3 Data API** - Records CRUD, links, attachments, button actions
